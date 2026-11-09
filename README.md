@@ -1,4 +1,6 @@
-# BRANDOS
+# BRANDOS — Fresh Studio
+
+A fresh cobalt-and-navy design with an interactive landing-page walkthrough, a redesigned dashboard, larger typography, and a complete content creation workflow. This project reuses tested media/export utilities and keeps browser data separate from the original app.
 
 A responsive content creation prototype built with Next.js App Router, TypeScript, Tailwind CSS, shadcn-style Radix/CVA Button, and Lucide icons. The complete guided journey runs without an account or external API keys.
 
@@ -11,12 +13,12 @@ npm ci
 npm run dev
 ```
 
-Open the application on port 3000. Enter the studio, complete or skip the short introduction, and create a new post. Select your own files or the original sample collection; choose a story direction, edit scenes, request demo revisions, and export a post package. Projects remain available after reloading.
+Open the application on port 3002. The original app remains in `/workspace/BRANDOS_PROTOTYPE`; this separate build is in `/workspace/BRANDOS_FRESH`. Enter the studio, complete or skip the short introduction, and create a new post. Select your own files or the original sample collection; choose a story direction, edit scenes, request demo revisions, and export a post package. Projects remain available after reloading.
 
 ```sh
 npm run typecheck
 npm run build
-npm start
+npm start -- --port 3002
 npm test
 ```
 
@@ -42,6 +44,8 @@ AI directions are templates and revisions are simple rules: shorten/faster, remo
 
 ### Optional Supabase account and metadata backup
 
+Use a separate Supabase project for this fresh version if you want to keep its cloud backups independent of the original app. No credentials or `.env.local` were copied from the original project.
+
 1. Create a Supabase project and run `supabase/schema.sql` in its SQL editor.
 2. Copy `.env.example` to `.env.local`; set the public project URL and publishable/anon key. Never put a service-role key in `NEXT_PUBLIC_*`.
 3. In Supabase Auth configure your application origin as Site URL and allow `/studio` as a redirect destination. Enable email/password with email confirmation as appropriate. Restart Next.js after changing environment variables.
@@ -59,7 +63,7 @@ Social OAuth, direct publishing, scheduling, background music mixing, automatic 
 ## Structure
 
 - `src/app`: landing, auth, studio routes and AI API
-- `src/components`: workspace, guided editor, media management, shared UI
+- `src/components`: fresh dashboard, interactive product demo, workspace, guided editor, media management, shared UI
 - `src/lib`: typed model, browser persistence, renderer, demo provider, Supabase client
 - `public/media`: original SVG illustrations and an actual MP4 sample generated from the coffee illustration (no third-party stock licensing needed)
 - `supabase/schema.sql`: database and private-bucket owner policies
