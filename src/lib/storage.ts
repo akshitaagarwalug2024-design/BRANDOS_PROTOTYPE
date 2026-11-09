@@ -1,4 +1,4 @@
-const DB = "brandos-media";
+const DB = "brandos-fresh-media";
 async function db() {
   return new Promise<IDBDatabase>((resolve, reject) => {
     const r = indexedDB.open(DB, 1);

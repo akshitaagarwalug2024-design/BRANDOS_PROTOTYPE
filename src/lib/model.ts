@@ -137,7 +137,7 @@ export function newProject(brand: Brand, idea = ""): Project {
   };
 }
 export const defaultBrand: Brand = {
-  color: "#66744d",
+  color: "#3264e8",
   font: "Sans",
   tone: "Warm & authentic",
   platform: "Instagram Reels",
@@ -146,7 +146,7 @@ export const defaultBrand: Brand = {
   editing: "Slow & intentional",
 };
 export function initialState(): State {
-  const p = newProject(defaultBrand, "Finding beauty in the everyday");
+  const p = newProject(defaultBrand, "The rhythm of a creative day");
   p.id = "sample-project";
   p.mediaIds = ["s1", "s2", "s3"];
   p.step = 3;
@@ -169,7 +169,7 @@ export function initialState(): State {
   }));
   p.caption =
     "A slower morning. A little intention. Something worth sharing. ☕\n\nSave this for a little inspiration.";
-  p.coverTitle = "The art of a slower morning";
+  p.coverTitle = "Create at your own pace";
   return {
     projects: [p],
     media: samples,
