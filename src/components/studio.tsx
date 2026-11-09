@@ -56,6 +56,7 @@ import { getFile, download, deleteFile } from "@/lib/storage";
 import { renderVideo, coverSvg, contrastText } from "@/lib/render";
 import { supabase } from "@/lib/supabase";
 import { MediaLibrary, Uploader, Thumbnail, Preview } from "./media";
+import Dashboard, { ProjectCard } from "./dashboard";
 const nav = [
   ["", "Dashboard", LayoutDashboard],
   ["create", "Create", Plus],
@@ -134,7 +135,7 @@ export default function Studio() {
     async function load() {
       let s: State;
       try {
-        const raw = localStorage.getItem("brandos-v1");
+        const raw = localStorage.getItem("brandos-fresh-v1");
         s = raw ? JSON.parse(raw) : initialState();
         if (
           !Array.isArray(s.projects) ||
@@ -185,7 +186,7 @@ export default function Studio() {
     if (!state || storageError) return;
     try {
       localStorage.setItem(
-        "brandos-v1",
+        "brandos-fresh-v1",
         JSON.stringify({
           ...state,
           media: state.media.map((m) => ({ ...m, url: m.sample ? m.url : "" })),
@@ -271,8 +272,8 @@ export default function Studio() {
     );
   const subheads: Record<string, [string, string]> = {
     "": [
-      "A little inspiration. A lot of possibility.",
-      "Your creative workspace, all in one place.",
+      "Your next story starts here.",
+      "A home for your ideas, your footage, and everything you’re making.",
     ],
     projects: [
       "Every story has a place.",
@@ -308,8 +309,8 @@ export default function Studio() {
     <div className={`app-shell ${collapsed ? "is-collapsed" : ""}`}>
       <aside className={`sidebar ${mobile ? "mobile-open" : ""}`}>
         <Link href="/" className="wordmark">
-          {collapsed ? "b." : "brandos"}
-          <span>®</span>
+          {collapsed ? "B" : "BRANDOS"}
+          <span className="studio-edition">STUDIO</span>
         </Link>
         <button
           className="collapse"
@@ -326,7 +327,7 @@ export default function Studio() {
           <span className="avatar">{state.profile.name[0]}</span>
           {!collapsed && (
             <div>
-              <b>My creative space</b>
+              <b>My workspace</b>
               <small>Personal workspace</small>
             </div>
           )}
@@ -352,16 +353,18 @@ export default function Studio() {
         <div className="sidebar-bottom">
           {!collapsed && (
             <div className="little-card">
-              <span className="sun-icon">✳</span>
+              <span className="sun-icon">
+                <Sparkles size={28} />
+              </span>
               <h4>
-                Your next good idea
+                Your next story
                 <br />
-                is already in there.
+                is waiting for you.
               </h4>
               <p>
-                Bring your moments.
+                Start with an idea.
                 <br />
-                We’ll help connect the dots.
+                Find your own creative rhythm.
               </p>
               <button onClick={() => create("", true)}>
                 Try a sample project <ArrowUpRight size={14} />
@@ -374,7 +377,7 @@ export default function Studio() {
             title="Studio guide"
           >
             <HelpCircle size={18} />
-            {!collapsed && "A little guidance"}
+            {!collapsed && "Studio guide"}
           </button>
           <div className="sidebar-user">
             <span className="avatar earth">{state.profile.name[0]}</span>
@@ -423,7 +426,7 @@ export default function Studio() {
           <div className="page-heading">
             <div>
               <span className="eyebrow">
-                {view === "" ? "YOUR CREATIVE HOME" : "THE BRANDOS STUDIO"}
+                {view === "" ? "YOUR WORKSPACE" : "THE BRANDOS STUDIO"}
               </span>
               <h1>{head[0]}</h1>
               <p>{head[1]}</p>
@@ -782,9 +785,9 @@ export default function Studio() {
             ))}
         </main>
         <footer className="workspace-footer">
-          <span>Good things take a little creating.</span>
+          <span>Ideas deserve to go somewhere.</span>
           <span>
-            Made with a little intention. <Sparkles size={12} />
+            Made with BRANDOS. <Sparkles size={12} />
           </span>
         </footer>
       </div>
@@ -826,7 +829,7 @@ export default function Studio() {
               ×
             </button>
             <Sparkles className="olive" />
-            <h2>A little guidance goes a long way.</h2>
+            <h2>Studio guide goes a long way.</h2>
             <p>BRANDOS brings the whole journey into one calm workspace.</p>
             <ol className="tour-steps">
               {steps.map((s, i) => (
@@ -860,215 +863,6 @@ export default function Studio() {
         </div>
       )}
     </div>
-  );
-}
-function Dashboard({
-  state,
-  create,
-  open,
-  go,
-}: {
-  state: State;
-  create: (idea?: string, sample?: boolean) => void;
-  open: (id: string) => void;
-  go: (s: string) => void;
-}) {
-  const latest = state.projects[0];
-  return (
-    <>
-      <section className="dashboard-hero">
-        <div className="dashboard-hero-copy">
-          <span className="eyebrow">MAKE SOMETHING THAT FEELS LIKE YOU</span>
-          <h2>
-            Big ideas.
-            <br />
-            <em>Small first steps.</em>
-          </h2>
-          <p>
-            You have the moments. Let’s turn them into
-            <br />a story worth sharing.
-          </p>
-          <Button onClick={() => create()}>
-            Create New Post <ArrowUpRight size={17} />
-          </Button>
-          <span className="soft-note">
-            From first spark to final post. We’re with you.
-          </span>
-        </div>
-        <div className="dashboard-collage">
-          <div className="collage-card secondary">
-            <img src="/media/grow.svg" alt="Botanical sample" />
-            <span>room to grow.</span>
-          </div>
-          <div className="collage-card primary">
-            <img src="/media/morning.svg" alt="Coffee ritual sample" />
-            <div>
-              <span>THE EVERYDAY SERIES</span>
-              <b>
-                Find the story
-                <br />
-                in the small things.
-              </b>
-            </div>
-          </div>
-          <span className="collage-sticker">
-            <Sparkles size={15} /> a little creative magic
-          </span>
-          <span className="collage-line">YOUR NEXT STORY STARTS HERE ↗</span>
-        </div>
-      </section>
-      <div className="stats-row">
-        {[
-          [
-            state.projects.length,
-            "Stories in the making",
-            FolderOpen,
-            "projects",
-          ],
-          [state.media.length, "Moments in your library", Images, "media"],
-          [
-            state.projects.filter((p) => p.status === "Ready to Publish")
-              .length,
-            "Ready for the world",
-            Send,
-            "publishing",
-          ],
-        ].map(([n, label, Icon, dest]) => {
-          const I = Icon as typeof FolderOpen;
-          return (
-            <button key={String(label)} onClick={() => go(String(dest))}>
-              <span className="stat-icon">
-                <I size={19} />
-              </span>
-              <div>
-                <strong>{String(n).padStart(2, "0")}</strong>
-                <span>{String(label)}</span>
-              </div>
-              <ArrowUpRight size={17} />
-            </button>
-          );
-        })}
-      </div>
-      <div className="section-heading compact">
-        <div>
-          <h2>Pick up where you left off.</h2>
-          <p>A little progress is still progress.</p>
-        </div>
-        <button className="text-link" onClick={() => go("projects")}>
-          All projects <ArrowRight size={16} />
-        </button>
-      </div>
-      <div className="project-grid">
-        {state.projects.slice(0, 3).map((p) => (
-          <ProjectCard
-            key={p.id}
-            project={p}
-            media={state.media}
-            open={() => open(p.id)}
-          />
-        ))}
-        <button className="new-project-card" onClick={() => create()}>
-          <span>
-            <Plus size={24} />
-          </span>
-          <h3>Make room for a new story.</h3>
-          <p>Your next idea goes here.</p>
-          <b>
-            Create a post <ArrowUpRight size={14} />
-          </b>
-        </button>
-      </div>
-      <div className="dashboard-bottom">
-        <article className="opportunity-panel">
-          <div className="row between">
-            <span className="eyebrow">
-              <Sparkles size={14} /> A FRESH PERSPECTIVE
-            </span>
-            <span className="badge">DEMO SUGGESTION</span>
-          </div>
-          <h2>
-            There’s more than one story
-            <br />
-            in your footage.
-          </h2>
-          <p>
-            Give your collection a new angle. Start with a behind-the-scenes
-            story, a small ritual, or something you’ve learned.
-          </p>
-          <button
-            className="text-link"
-            onClick={() => go("ideas?source=footage")}
-          >
-            Find posts in my footage <ArrowUpRight size={16} />
-          </button>
-        </article>
-        <article className="templates-panel">
-          <div className="row between">
-            <h3>Skip the blank page.</h3>
-            <Lightbulb size={19} />
-          </div>
-          <p>A little structure to get you started.</p>
-          {[
-            ["Behind the scenes", "Let people into your process."],
-            ["A day in the life", "Find the story in your everyday."],
-            ["Three things I learned", "A little wisdom, worth sharing."],
-          ].map(([t, d], i) => (
-            <button key={t} onClick={() => create(t, true)}>
-              <span className={`template-icon tint-${i}`}>
-                <Film size={17} />
-              </span>
-              <span>
-                <b>{t}</b>
-                <small>{d}</small>
-              </span>
-              <ArrowUpRight size={16} />
-            </button>
-          ))}
-        </article>
-      </div>
-      {latest && (
-        <span className="sr-only">Continue editing {latest.title}</span>
-      )}
-    </>
-  );
-}
-function ProjectCard({
-  project: p,
-  media,
-  open,
-}: {
-  project: Project;
-  media: Media[];
-  open: () => void;
-}) {
-  return (
-    <button className="project-card" onClick={open}>
-      <div className="project-art">
-        <Thumbnail
-          media={media.find(
-            (m) => m.id === (p.scenes[0]?.mediaId || p.mediaIds[0]),
-          )}
-        />
-        <span
-          className={`status status-${p.status.replaceAll(" ", "-").toLowerCase()}`}
-        >
-          {p.status}
-        </span>
-        <span className="project-platform">{p.platform}</span>
-      </div>
-      <div className="project-info">
-        <h3>{p.title}</h3>
-        <div className="row between">
-          <small>
-            {steps[p.step]} ·{" "}
-            {p.scenes.length
-              ? p.scenes.reduce((n, s) => n + s.duration, 0) + " sec"
-              : "New story"}
-          </small>
-          <ArrowUpRight size={17} />
-        </div>
-      </div>
-    </button>
   );
 }
 function Projects({
@@ -1258,7 +1052,9 @@ function Wizard({
     [revision, setRevision] = useState(""),
     [method, setMethod] = useState("I already have an idea");
   const set = (v: Partial<Project>) => update({ ...p, ...v });
-  const selected = state.media.filter((m) => p.mediaIds.includes(m.id));
+  const selected = p.mediaIds.flatMap(
+    (id) => state.media.find((m) => m.id === id) || [],
+  );
   const total = p.scenes.reduce((n, s) => n + s.duration, 0);
   const goNext = async () => {
     if (p.step === 0) {

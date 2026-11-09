@@ -211,3 +211,49 @@ test("core screens pass automated WCAG A/AA checks", async ({ page }) => {
     expect(result.violations, route).toEqual([]);
   }
 });
+
+test("interactive walkthrough supports keyboard navigation and fresh storage preserves original workspace", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const idea = page.getByRole("tab", { name: "1 Idea", exact: true });
+  await idea.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(
+    page.getByRole("tab", { name: "2 Upload", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  await expect(
+    page.getByRole("heading", { name: "Bring the moments together." }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Next step", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Find a direction that feels right." }),
+  ).toBeVisible();
+  await page.evaluate(() =>
+    localStorage.setItem("brandos-v1", JSON.stringify({ original: "keep-me" })),
+  );
+  await studio(page);
+  await expect
+    .poll(() =>
+      page.evaluate(() => Boolean(localStorage.getItem("brandos-fresh-v1"))),
+    )
+    .toBe(true);
+  expect(
+    await page.evaluate(() => JSON.parse(localStorage.getItem("brandos-v1")!)),
+  ).toEqual({ original: "keep-me" });
+  await page
+    .getByRole("button", { name: "Create New Post", exact: true })
+    .first()
+    .click();
+  await page
+    .getByPlaceholder("e.g. The little rituals")
+    .fill("A fresh independent project");
+  await page.getByRole("button", { name: "Bring your footage" }).click();
+  await page.reload();
+  await expect(
+    page.getByText("A fresh independent project", { exact: true }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(() => JSON.parse(localStorage.getItem("brandos-v1")!)),
+  ).toEqual({ original: "keep-me" });
+});
