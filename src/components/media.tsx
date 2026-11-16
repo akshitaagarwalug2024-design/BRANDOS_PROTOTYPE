@@ -7,12 +7,19 @@ import {
   Check,
   Play,
   Pause,
-  ArrowUpRight,
   ImageIcon,
+  LayoutGrid,
+  List,
+  Folder,
+  FolderPlus,
+  WandSparkles,
 } from "lucide-react";
 import { Button } from "./ui/button";
-import { putFile, deleteFile } from "@/lib/storage";
-import type { Media, Project, Brand } from "@/lib/model";
+import { putFile } from "@/lib/storage";
+import { analyze } from "@/lib/library";
+import { gradeFilter, type Media, type Project, type Brand } from "@/lib/model";
+import { startMusic } from "@/lib/music";
+import { contrastText } from "@/lib/render";
 export function Thumbnail({
   media,
   className = "",
@@ -48,9 +55,11 @@ export function Thumbnail({
 export function Uploader({
   onAdd,
   notify,
+  collection = "My uploads",
 }: {
   onAdd: (media: Media[]) => void;
   notify: (s: string) => void;
+  collection?: string;
 }) {
   const [busy, setBusy] = useState(false),
     [progress, setProgress] = useState(0),
@@ -83,9 +92,14 @@ export function Uploader({
           name: f.name,
           type: f.type.split("/")[0] as Media["type"],
           url: URL.createObjectURL(f),
-          collection: "My uploads",
+          collection,
           tags: "",
           size: f.size,
+          ...(await analyze(
+            f,
+            f.type.split("/")[0] as Media["type"],
+            f.lastModified,
+          )),
         });
         setProgress(Math.round(((i + 1) / files.length) * 100));
       }
@@ -103,7 +117,7 @@ export function Uploader({
   }
   return (
     <div
-      className={`upload-zone ${drag ? "drag" : ""}`}
+      className={`upload-bar ${drag ? "drag" : ""}`}
       onDragOver={(e) => {
         e.preventDefault();
         setDrag(true);
@@ -115,21 +129,31 @@ export function Uploader({
         if (!busy) void add(e.dataTransfer.files);
       }}
     >
-      <span className="upload-icon">
-        <Upload size={25} />
+      <Upload size={17} />
+      <span>
+        {busy ? (
+          `Storing your media · ${progress}%`
+        ) : (
+          <>
+            <b>Drop videos, photos or audio here</b> · goes into “{collection}”
+            · up to 100 MB each
+          </>
+        )}
       </span>
-      <h3>
-        {busy
-          ? `Storing your media · ${progress}%`
-          : "Good stories start with your moments."}
-      </h3>
-      <p>Drop videos, photos, or audio here. Up to 100 MB per file.</p>
+      {busy && (
+        <progress
+          max={100}
+          value={progress}
+          aria-label="File storage progress"
+        />
+      )}
       <Button
         variant="outline"
+        size="sm"
         disabled={busy}
         onClick={() => input.current?.click()}
       >
-        <Upload size={15} /> Browse files
+        Browse files
       </Button>
       <input
         ref={input}
@@ -139,99 +163,263 @@ export function Uploader({
         onChange={(e) => void add(e.target.files)}
         hidden
       />
-      {busy && (
-        <progress
-          max={100}
-          value={progress}
-          aria-label="File storage progress"
-        />
-      )}
-      <small>Stored on this device · no upload to an external service</small>
     </div>
   );
 }
+const fileSize = (n?: number) =>
+  !n
+    ? "—"
+    : n > 1048576
+      ? `${(n / 1048576).toFixed(1)} MB`
+      : `${Math.ceil(n / 1024)} KB`;
 export function MediaLibrary({
   media,
   onAdd,
   onChange,
   onDelete,
+  onMove,
+  onMake,
   notify,
-  onDiscover,
 }: {
   media: Media[];
   onAdd: (m: Media[]) => void;
   onChange: (m: Media) => void;
   onDelete: (id: string) => void;
+  onMove: (ids: string[], collection: string) => void;
+  onMake: (ids: string[]) => void;
   notify: (s: string) => void;
-  onDiscover: () => void;
 }) {
   const [search, setSearch] = useState(""),
     [filter, setFilter] = useState("all"),
+    [list, setList] = useState(false),
+    [folder, setFolder] = useState(""),
+    [extra, setExtra] = useState<string[]>([]),
+    [naming, setNaming] = useState(false),
+    [picked, setPicked] = useState<string[]>([]),
+    [over, setOver] = useState(""),
     [selected, setSelected] = useState<Media | null>(null);
+  const folders = [...new Set([...media.map((m) => m.collection), ...extra])];
   const filtered = media.filter(
     (m) =>
+      (!folder || m.collection === folder) &&
       (filter === "all" || m.type === filter) &&
-      `${m.name} ${m.tags} ${m.collection}`
+      `${m.name} ${m.tags} ${m.collection} ${m.auto || ""} ${m.note || ""}`
         .toLowerCase()
         .includes(search.toLowerCase()),
   );
+  const move = (ids: string[], to: string) => {
+    if (!ids.length || !to) return;
+    onMove(ids, to);
+    setPicked([]);
+    notify(
+      `Moved ${ids.length} file${ids.length === 1 ? "" : "s"} to “${to}”.`,
+    );
+  };
+  const drop = (to: string) => ({
+    onDragOver: (e: React.DragEvent) => {
+      e.preventDefault();
+      setOver(to);
+    },
+    onDragLeave: () => setOver(""),
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault();
+      setOver("");
+      const id = e.dataTransfer.getData("text/brandos-media");
+      if (id) move(picked.includes(id) ? picked : [id], to);
+    },
+  });
   return (
-    <>
-      <Uploader onAdd={onAdd} notify={notify} />
-      <div className="section-heading compact">
-        <div>
-          <h2>
-            Your media, in one place{" "}
-            <span className="count">{media.length}</span>
-          </h2>
-          <p>Organize a collection. Find the story. Use it again.</p>
-        </div>
-        <Button variant="outline" onClick={onDiscover}>
-          Find posts in my footage <ArrowUpRight size={15} />
-        </Button>
-      </div>
-      <div className="filter-row">
-        <input
-          aria-label="Search media"
-          placeholder="Search names, tags, collections…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        <select
-          aria-label="Filter media type"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
+    <div className="lib">
+      <nav className="lib-folders" aria-label="Folders">
+        <button
+          className={!folder ? "active" : ""}
+          onClick={() => setFolder("")}
         >
-          <option value="all">All media</option>
-          <option value="image">Photos</option>
-          <option value="video">Videos</option>
-          <option value="audio">Audio</option>
-        </select>
-      </div>
-      <div className="media-grid">
-        {filtered.map((m) => (
+          <Folder size={15} /> All files <span>{media.length}</span>
+        </button>
+        {folders.map((f) => (
           <button
-            key={m.id}
-            className="media-card"
-            onClick={() => setSelected(m)}
+            key={f}
+            className={`${folder === f ? "active" : ""} ${over === f ? "over" : ""}`}
+            onClick={() => setFolder(f)}
+            {...drop(f)}
           >
-            <Thumbnail media={m} />
-            <div>
-              <b>{m.name}</b>
-              <small>
-                {m.collection} {m.sample ? "· Sample" : ""}
-              </small>
-            </div>
+            <Folder size={15} /> {f}{" "}
+            <span>{media.filter((m) => m.collection === f).length}</span>
           </button>
         ))}
-      </div>
-      {!filtered.length && (
-        <div className="empty">
-          <ImageIcon />
-          <h3>No media found</h3>
-          <p>Try a different search or add a new file above.</p>
+        {naming ? (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const name = new FormData(e.currentTarget)
+                .get("name")!
+                .toString()
+                .trim();
+              if (name) {
+                setExtra([...extra, name]);
+                setFolder(name);
+                if (picked.length) move(picked, name);
+              }
+              setNaming(false);
+            }}
+          >
+            <input
+              name="name"
+              autoFocus
+              aria-label="New folder name"
+              placeholder="Folder name, then Enter"
+              maxLength={40}
+              onBlur={() => setNaming(false)}
+            />
+          </form>
+        ) : (
+          <button className="lib-new" onClick={() => setNaming(true)}>
+            <FolderPlus size={15} /> New folder
+          </button>
+        )}
+        <small>Drag files onto a folder, or tick them and choose Move.</small>
+      </nav>
+      <div className="lib-main">
+        <Uploader
+          onAdd={onAdd}
+          notify={notify}
+          collection={folder || "My uploads"}
+        />
+        <div className="filter-row media-toolbar">
+          <input
+            aria-label="Search media"
+            placeholder="Search names, tags, folders…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <div className="segmented" role="group" aria-label="Media type">
+            {[
+              ["all", "All"],
+              ["image", "Photos"],
+              ["video", "Videos"],
+              ["audio", "Audio"],
+            ].map(([key, label]) => (
+              <button
+                key={key}
+                className={filter === key ? "active" : ""}
+                aria-pressed={filter === key}
+                onClick={() => setFilter(key)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <span>
+            {filtered.length} of {media.length} files
+          </span>
+          <div className="segmented" role="group" aria-label="Layout">
+            <button
+              className={!list ? "active" : ""}
+              aria-pressed={!list}
+              aria-label="Grid view"
+              title="Grid view"
+              onClick={() => setList(false)}
+            >
+              <LayoutGrid size={14} />
+            </button>
+            <button
+              className={list ? "active" : ""}
+              aria-pressed={list}
+              aria-label="List view"
+              title="List view"
+              onClick={() => setList(true)}
+            >
+              <List size={14} />
+            </button>
+          </div>
         </div>
-      )}
+        {picked.length > 0 && (
+          <div
+            className="lib-actions"
+            role="region"
+            aria-label="Selected files"
+          >
+            <b>{picked.length} selected</b>
+            <select
+              aria-label="Move selected files to folder"
+              value=""
+              onChange={(e) =>
+                e.target.value === "+"
+                  ? setNaming(true)
+                  : move(picked, e.target.value)
+              }
+            >
+              <option value="">Move to folder…</option>
+              {folders.map((f) => (
+                <option key={f}>{f}</option>
+              ))}
+              <option value="+">+ New folder</option>
+            </select>
+            <Button size="sm" onClick={() => onMake(picked)}>
+              <WandSparkles size={14} /> Make a post from these
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setPicked([])}>
+              Clear
+            </Button>
+          </div>
+        )}
+        <div className={list ? "media-list" : "media-tiles"}>
+          {filtered.map((m) => (
+            <div
+              key={m.id}
+              className={`media-cell ${picked.includes(m.id) ? "picked" : ""}`}
+              draggable
+              onDragStart={(e) =>
+                e.dataTransfer.setData("text/brandos-media", m.id)
+              }
+            >
+              <input
+                type="checkbox"
+                aria-label={`Select ${m.name}`}
+                checked={picked.includes(m.id)}
+                onChange={(e) =>
+                  setPicked(
+                    e.target.checked
+                      ? [...picked, m.id]
+                      : picked.filter((id) => id !== m.id),
+                  )
+                }
+              />
+              <button
+                className="media-tile"
+                title={`${m.name} · ${m.collection}`}
+                onClick={() => setSelected(m)}
+              >
+                <Thumbnail media={m} />
+                <b>{m.name}</b>
+                <small>
+                  {m.collection}
+                  {m.sample ? " · Sample" : ""}
+                </small>
+                {list && (
+                  <>
+                    <small>{m.auto || m.type}</small>
+                    <small>{m.tags || "No tags"}</small>
+                    <small>{fileSize(m.size)}</small>
+                  </>
+                )}
+              </button>
+            </div>
+          ))}
+        </div>
+        {!filtered.length && (
+          <div className="empty">
+            <ImageIcon />
+            <h3>{folder ? `“${folder}” is empty` : "No media found"}</h3>
+            <p>
+              {folder
+                ? "Drop files above to add them straight to this folder."
+                : "Try a different search or add a new file above."}
+            </p>
+          </div>
+        )}
+      </div>
       {selected && (
         <div className="modal-backdrop" onClick={() => setSelected(null)}>
           <section
@@ -249,7 +437,7 @@ export function MediaLibrary({
             >
               ×
             </button>
-            <h2>Make it easy to find.</h2>
+            <h2>File details</h2>
             {selected.type === "video" ? (
               <video className="detail-preview" src={selected.url} controls />
             ) : selected.type === "audio" ? (
@@ -283,11 +471,17 @@ export function MediaLibrary({
                 <label>
                   Collection
                   <input
+                    list="lib-folders"
                     value={selected.collection}
                     onChange={(e) =>
                       setSelected({ ...selected, collection: e.target.value })
                     }
                   />
+                  <datalist id="lib-folders">
+                    {folders.map((f) => (
+                      <option key={f} value={f} />
+                    ))}
+                  </datalist>
                 </label>
                 <label>
                   Tags
@@ -299,11 +493,14 @@ export function MediaLibrary({
                   />
                 </label>
               </div>
-              <p className="notice">
-                {selected.sample
-                  ? "Sample metadata: illustrative lifestyle scenes."
-                  : "No AI footage analysis is connected. Add your own tags to help organize this file."}
-              </p>
+              {selected.auto && (
+                <p className="muted">
+                  Indexed automatically as: {selected.auto}
+                  {selected.meta?.duration
+                    ? ` · ${selected.meta.duration}s`
+                    : ""}
+                </p>
+              )}
               <div className="row between">
                 <Button type="submit">
                   Save details <Check size={15} />
@@ -311,18 +508,10 @@ export function MediaLibrary({
                 <Button
                   type="button"
                   variant="ghost"
-                  onClick={async () => {
-                    if (
-                      confirm(
-                        "Delete this file? Remove it from projects first if you still need it.",
-                      )
-                    ) {
-                      try {
-                        onDelete(selected.id);
-                        setSelected(null);
-                      } catch {
-                        notify("Could not delete file. Try again.");
-                      }
+                  onClick={() => {
+                    if (confirm("Delete this file?")) {
+                      onDelete(selected.id);
+                      setSelected(null);
                     }
                   }}
                 >
@@ -333,9 +522,10 @@ export function MediaLibrary({
           </section>
         </div>
       )}
-    </>
+    </div>
   );
 }
+const slug = (s: string) => s.toLowerCase().replaceAll(" ", "-");
 export function Preview({
   project,
   media,
@@ -357,6 +547,10 @@ export function Preview({
   );
   const video = useRef<HTMLVideoElement>(null);
   const audio = useRef<HTMLAudioElement>(null);
+  const total = project.scenes.reduce((n, s) => n + s.duration, 0) || 1;
+  const before = project.scenes
+    .slice(0, active)
+    .reduce((n, s) => n + s.duration, 0);
   useEffect(() => {
     if (!playing || !scene) return;
     timer.current = setTimeout(() => {
@@ -379,45 +573,149 @@ export function Preview({
       else player.pause();
     }
   }, [playing, active, item?.url, scene?.trim, project.volume]);
+  // Backing track plays only while the preview is playing.
+  useEffect(() => {
+    if (!playing || project.music === "None") return;
+    const ctx = new AudioContext();
+    const stop = startMusic(
+      ctx,
+      ctx.destination,
+      project.music,
+      project.musicVolume,
+    );
+    return () => {
+      stop();
+      setTimeout(() => void ctx.close(), 450);
+    };
+  }, [playing, project.music, project.musicVolume]);
+  const accent = project.accent || brand.color;
+  const motion = {
+    animationDuration: `${scene?.duration || 5}s`,
+    animationPlayState: playing ? "running" : "paused",
+  };
+  const motionClass = `mo-${slug(scene?.motion || "None")}`;
   return (
     <div className="preview-wrap">
       <div
-        className={`video-preview ratio-${project.ratio.replace(":", "-")}`}
-        style={{
-          background: brand.color,
-          filter: `brightness(${project.brightness}%)`,
-        }}
+        className={`video-preview ratio-${project.ratio.replace(":", "-")} font-${slug(brand.font)}`}
+        style={{ background: "#000" }}
       >
-        {item?.type === "video" ? (
-          <video
-            ref={video}
-            src={item.url}
-            loop
-            playsInline
-            muted={project.volume === 0}
-          />
-        ) : item?.type === "image" ? (
-          <img src={item.url} alt={item.name} />
-        ) : (
-          <div className="audio-art">
-            <Music size={48} />
-            <p>{item?.name || "Your story starts here"}</p>
-            {item?.type === "audio" && (
-              <audio ref={audio} src={item.url} loop />
-            )}
-          </div>
-        )}
-        <div className="preview-brand">
-          {brand.logo && <img src={brand.logo} alt="Brand logo" />}MADE WITH
-          INTENTION
+        <div
+          key={scene?.id}
+          className={`pv-stage ${playing ? `tr-${slug(scene?.transition || project.transition)}` : ""}`}
+          style={{
+            background: accent,
+            filter: gradeFilter(project.grade, project.brightness),
+          }}
+        >
+          {item?.type === "video" ? (
+            <video
+              ref={video}
+              className={motionClass}
+              style={motion}
+              src={item.url}
+              loop
+              playsInline
+              muted={project.volume === 0}
+            />
+          ) : item?.type === "image" ? (
+            <img
+              className={motionClass}
+              style={motion}
+              src={item.url}
+              alt={item.name}
+            />
+          ) : (
+            <div className="audio-art">
+              <Music size={48} />
+              <p>{item?.name || "Your story starts here"}</p>
+              {item?.type === "audio" && (
+                <audio ref={audio} src={item.url} loop />
+              )}
+            </div>
+          )}
         </div>
-        {project.subtitles && (
-          <div
-            className={`preview-caption ${brand.font === "Serif" ? "serif" : ""}`}
-          >
-            {scene?.text || project.idea || "A slower kind of morning."}
+        {project.elements.progress && (
+          <div className="pv-progress">
+            <span
+              style={{
+                background: accent,
+                width: `${((before + (playing ? scene?.duration || 0 : 0)) / total) * 100}%`,
+                transitionDuration: playing ? `${scene?.duration}s` : "0s",
+              }}
+            />
           </div>
         )}
+        {project.elements.watermark && (
+          <div className="preview-brand">
+            {brand.logo && <img src={brand.logo} alt="Brand logo" />}
+            {project.mark}
+          </div>
+        )}
+        {project.elements.title && active === 0 && (
+          <div
+            key={`t${playing}`}
+            className={`pv-title ${playing ? "timed" : ""}`}
+          >
+            <span style={{ background: accent, color: contrastText(accent) }}>
+              {project.coverTitle || project.title}
+            </span>
+          </div>
+        )}
+        {project.subtitles && scene?.text && (
+          <div
+            key={`s${scene.id}${playing}`}
+            className={`preview-caption ts-${slug(project.textStyle)} tp-${slug(project.textPosition)} ta-${slug(project.textAnim)}`}
+          >
+            <span>
+              {scene.text.split(" ").map((word, i, all) => {
+                const step = Math.max(
+                  0.22,
+                  Math.min(0.5, (scene.duration * 0.8) / all.length),
+                );
+                const on =
+                  project.captionFx === "Highlight" &&
+                  project.textStyle !== "Minimal";
+                return (
+                  <i
+                    key={i}
+                    className={
+                      on ? (playing ? "hl" : i === 0 ? "hl-on" : "") : ""
+                    }
+                    style={
+                      {
+                        "--hl": accent,
+                        "--hlc": contrastText(accent),
+                        animationDuration: `${step}s`,
+                        animationDelay: `${i * step}s`,
+                      } as React.CSSProperties
+                    }
+                  >
+                    {word}{" "}
+                  </i>
+                );
+              })}
+            </span>
+          </div>
+        )}
+        {project.elements.cta &&
+          project.cta &&
+          active === project.scenes.length - 1 && (
+            <div
+              className="pv-cta"
+              style={{
+                background: accent,
+                color: contrastText(accent),
+                animationDelay: playing
+                  ? `${Math.max(0, (scene?.duration || 0) - 2.5)}s`
+                  : "0s",
+              }}
+              key={`c${playing}`}
+            >
+              <b>{project.cta}</b>
+              <small>{project.mark}</small>
+            </div>
+          )}
         <button
           className="preview-play"
           onClick={() => setPlaying(!playing)}
@@ -429,18 +727,14 @@ export function Preview({
             <Play size={20} fill="currentColor" />
           )}
         </button>
-        <span className="preview-label">
-          {item?.sample ? "SAMPLE FOOTAGE" : "LOCAL PREVIEW"}
-        </span>
       </div>
       <div className="row between preview-meta">
         <span>
-          {String(active + 1).padStart(2, "0")} /{" "}
-          {String(Math.max(1, project.scenes.length)).padStart(2, "0")} scenes
+          Scene {active + 1} of {Math.max(1, project.scenes.length)}
         </span>
         <span>
-          {project.scenes.reduce((n, s) => n + s.duration, 0)} sec ·{" "}
-          {project.ratio}
+          {total} sec · {project.ratio} ·{" "}
+          {project.music === "None" ? "no music" : `${project.music} music`}
         </span>
       </div>
     </div>

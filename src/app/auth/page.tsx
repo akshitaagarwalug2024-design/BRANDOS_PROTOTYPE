@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ArrowUpRight, Sparkles } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -9,7 +9,21 @@ export default function Auth() {
     [email, setEmail] = useState(""),
     [password, setPassword] = useState(""),
     [message, setMessage] = useState(""),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [account, setAccount] = useState("");
+  useEffect(() => {
+    if (!supabase) return;
+    const params = new URLSearchParams(location.hash.slice(1));
+    const urlError = params.get("error_description");
+    if (urlError) setMessage(urlError.replace(/\+/g, " "));
+    void supabase.auth.getUser().then(({ data }) => {
+      setAccount(data.user?.email || "");
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      setAccount(session?.user?.email || "");
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
   return (
     <main className="auth-page">
       <div className="auth-art">
@@ -94,6 +108,22 @@ export default function Auth() {
         {message && (
           <p role="status" className="notice">
             {message}
+          </p>
+        )}
+        {account && (
+          <p role="status" className="notice">
+            You are signed in as {account}.{" "}
+            <Link href="/studio">Open the studio</Link> or{" "}
+            <button
+              className="text-link"
+              onClick={async () => {
+                await supabase?.auth.signOut();
+                setMessage("Signed out.");
+              }}
+            >
+              sign out
+            </button>
+            .
           </p>
         )}
         <button className="text-link" onClick={() => setSignup(!signup)}>

@@ -16,34 +16,34 @@ import {
 import { ProductDemo } from "@/components/product-demo";
 const workflow = [
   {
-    icon: Lightbulb,
-    title: "Start with an idea",
-    description:
-      "A rough thought, a clear brief, or a collection of footage. There’s more than one way in.",
-  },
-  {
     icon: Upload,
-    title: "Bring your content",
+    title: "Add your footage",
     description:
-      "Add videos, photos, and audio. Keep your moments together in a reusable media library.",
+      "Drop in videos, photos, and audio — or start with the sample collection.",
   },
   {
-    icon: ScanLine,
-    title: "Find your story",
+    icon: Lightbulb,
+    title: "Pick an idea, or don’t",
     description:
-      "Explore hooks and story directions. Choose a plan before getting into the details.",
+      "Browse ready-made ideas with nothing to fill in, or let BRANDOS choose one.",
   },
   {
     icon: WandSparkles,
-    title: "Make it yours",
+    title: "Get a finished first edit",
     description:
-      "Refine your scenes with a simple editor. Open advanced controls whenever you need them.",
+      "Scenes, transitions, effects, music, and subtitles are added for you in one click.",
+  },
+  {
+    icon: ScanLine,
+    title: "Change anything",
+    description:
+      "Edit every element — text, sound, colour, timing — next to a live preview.",
   },
   {
     icon: ArrowUpRight,
-    title: "Get ready to share",
+    title: "Export and schedule",
     description:
-      "Bring your video, cover, caption, and hashtags together in one editable post package.",
+      "Download the video with its caption and cover, then plan it on your calendar.",
   },
 ];
 export default function Home() {
@@ -62,11 +62,8 @@ export default function Home() {
           <a href="#questions">Questions</a>
         </nav>
         <div className="row">
-          <Link className="login-link" href="/auth">
-            Sign in
-          </Link>
-          <Link className="btn btn-primary" href="/studio">
-            Enter the studio <ArrowUpRight size={16} />
+          <Link className="btn btn-primary" href="/auth">
+            Sign in / Log in <ArrowUpRight size={16} />
           </Link>
         </div>
       </header>
@@ -256,8 +253,8 @@ export default function Home() {
               </span>
               <h3>Simple first. Control when you need it.</h3>
               <p>
-                A guided workspace for beginners. Scene order, timing, overlays,
-                and audio controls for the details that matter.
+                Start from a finished edit. Scene order, timing, text, music,
+                and colour controls for the details that matter.
               </p>
               <Link href="/studio/create">
                 Try the creation flow <ArrowUpRight size={16} />
@@ -288,11 +285,11 @@ export default function Home() {
             </div>
             <ul>
               {[
-                "Guided five-step creation workflow",
+                "One-click first edit with transitions, music, and subtitles",
                 "Your own footage or a sample collection",
-                "Simple and advanced editing controls",
+                "Edit every element beside a live preview",
                 "Real browser-rendered video exports",
-                "Editable captions, covers, and post packages",
+                "A content calendar, journal, and sample insights dashboard",
               ].map((text) => (
                 <li key={text}>
                   <Check size={17} />
@@ -312,11 +309,11 @@ export default function Home() {
           {[
             [
               "Do I need editing experience?",
-              "No. Follow the five-step flow, approve a story direction, and adjust the parts you want. Advanced controls are there when you’re ready.",
+              "No. BRANDOS builds a complete first edit for you. Change only the parts you want, next to a live preview.",
             ],
             [
               "What does Demo Mode actually do?",
-              "It provides template-based story plans and rule-based revisions. It does not analyze footage or call an AI model. The source editor and browser video exports work with your real files.",
+              "It builds edits and ideas from templates and simple rules. It does not analyze footage or call an AI model, and the dashboard shows sample analytics. The editor and browser video exports work with your real files.",
             ],
             [
               "Can I upload my own videos?",

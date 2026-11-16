@@ -12,9 +12,11 @@ export default async function Page({
     ![
       "",
       "create",
+      "insights",
       "projects",
       "media",
       "ideas",
+      "journal",
       "publishing",
       "brand",
       "settings",
