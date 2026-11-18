@@ -1,6 +1,7 @@
 import { gradeFilter, type Brand, type Project, type Media } from "./model";
 import { startMusic } from "./music";
 import { svgUrl } from "./shapes";
+import { first, stops } from "./colour";
 function lines(ctx: CanvasRenderingContext2D, text: string, width: number) {
   const words = text.split(" "),
     out: string[] = [];
@@ -60,10 +61,22 @@ export async function renderVideo(
   const total = project.scenes.reduce((n, s) => n + s.duration, 0);
   if (!total || total > 120)
     throw Error("Choose a timeline between 1 and 120 seconds.");
-  const accent = /^#[0-9a-f]{6}$/i.test(project.accent)
-    ? project.accent
-    : color;
-  const onAccent = contrastText(accent);
+  // One colour, or a blend drawn as a gradient across the whole frame.
+  const blend = stops(project.accent).length
+    ? stops(project.accent)
+    : stops(color);
+  let accent: string | CanvasGradient = blend[0] || "#285bdb";
+  if (blend.length > 1) {
+    const gradient = ctx.createLinearGradient(
+      0,
+      0,
+      dimensions[0],
+      dimensions[1],
+    );
+    blend.forEach((c, i) => gradient.addColorStop(i / (blend.length - 1), c));
+    accent = gradient;
+  }
+  const onAccent = contrastText(blend[0] || "#285bdb");
   // Brand typography: the kit's font choice drives every piece of on-screen text.
   const css = getComputedStyle(document.documentElement);
   const display =
@@ -170,6 +183,11 @@ export async function renderVideo(
       const trackGain = audio.createGain();
       trackGain.gain.value = project.musicVolume;
       audio.createMediaElementSource(track).connect(trackGain).connect(level);
+      if (project.musicFade !== false) {
+        const end = audio.currentTime + total;
+        trackGain.gain.setValueAtTime(project.musicVolume, end - 1.2);
+        trackGain.gain.linearRampToValueAtTime(0, end);
+      }
       await track.play();
       stopMusic = () => track.pause();
     } else
@@ -448,12 +466,10 @@ export async function renderVideo(
             ls.forEach((s, i) =>
               ctx.fillText(s, w / 2, py + ph * 0.36 + i * f * 1.2),
             );
-            ctx.font = `600 ${Math.round(w / 30)}px ${family}`;
-            ctx.globalAlpha = 0.8;
-            ctx.fillText(project.mark, w / 2, py + ph - 46);
             ctx.restore();
           }
-          if (project.elements.watermark && (project.mark || logo)) {
+          // The watermark steps aside for the end card.
+          if (project.elements.watermark && (project.mark || logo) && !ending) {
             ctx.save();
             ctx.textAlign = "left";
             ctx.textBaseline = "middle";
@@ -517,6 +533,17 @@ export async function renderVideo(
     await audio?.close();
   }
 }
+const cover = (color: string) => {
+  const list = stops(color);
+  return list.length > 1
+    ? `<defs><linearGradient id="cover" x1="0" y1="0" x2="1" y2="1">${list
+        .map(
+          (c, i) =>
+            `<stop offset="${i / (list.length - 1)}" stop-color="${c}"/>`,
+        )
+        .join("")}</linearGradient></defs>`
+    : "";
+};
 export function coverSvg(title: string, color: string) {
   const escape = (s: string) =>
     s.replace(
@@ -540,7 +567,7 @@ export function coverSvg(title: string, color: string) {
     } else l += (l ? " " : "") + w;
   }
   ls.push(l);
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920"><rect width="1080" height="1920" fill="${/^#[0-9a-f]{6}$/i.test(color) ? color : "#66744d"}"/><circle cx="900" cy="300" r="500" fill="#ffffff" opacity=".07"/><text x="90" y="180" fill="${contrastText(color)}" font-family="sans-serif" font-size="36" letter-spacing="8">NEW POST</text>${ls
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920">${cover(color)}<rect width="1080" height="1920" fill="${stops(color).length > 1 ? "url(#cover)" : first(color)}"/><circle cx="900" cy="300" r="500" fill="#ffffff" opacity=".07"/><text x="90" y="180" fill="${contrastText(color)}" font-family="sans-serif" font-size="36" letter-spacing="8">NEW POST</text>${ls
     .slice(0, 7)
     .map(
       (s, i) =>
@@ -551,10 +578,9 @@ export function coverSvg(title: string, color: string) {
     )}<text x="90" y="1770" fill="${contrastText(color)}" font-family="sans-serif" font-size="32">Made with UnStuck</text></svg>`;
 }
 
-export function contrastText(color: string) {
-  const rgb = /^#[0-9a-f]{6}$/i.test(color)
-    ? [1, 3, 5].map((i) => parseInt(color.slice(i, i + 2), 16) / 255)
-    : [0.4, 0.45, 0.3];
+export function contrastText(value: string) {
+  const color = first(value);
+  const rgb = [1, 3, 5].map((i) => parseInt(color.slice(i, i + 2), 16) / 255);
   const linear = rgb.map((v) =>
     v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4,
   );

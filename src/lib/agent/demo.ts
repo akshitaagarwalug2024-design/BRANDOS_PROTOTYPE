@@ -16,6 +16,26 @@ const call = (name: string, args: Json = {}) => ({
 });
 const output = <T>(t: Transcript, name: string) =>
   t.findLast((e) => e.call.name === name && e.ok)?.output as T | undefined;
+// Turns a brief written as a full sentence into a short working title: drops
+// the "I need a video about" preamble and stops at the first natural break.
+const subject = (brief: string) => {
+  const core = brief
+    .trim()
+    .replace(
+      /^(please\s+)?(i|we)\s+(need|want|would like|\'d like)\s+(to\s+(make|create)\s+)?(an?\s+)?((introductory|intro|short|new)\s+)*(video|reel|post|clip)?\s*(that\s+is\s+|which\s+is\s+)?(introducing|about|on|for|showing|to introduce)?\s*/i,
+      "",
+    )
+    .split(/[.,;:!?\n]| introducing | because | so that | which | that /i)[0]
+    .trim();
+  const words = (core || brief.trim()).split(/\s+/);
+  let out = "";
+  for (const word of words) {
+    if ((out + " " + word).length > 60) break;
+    out += (out ? " " : "") + word;
+  }
+  out = out || brief.trim().slice(0, 60);
+  return out[0].toUpperCase() + out.slice(1);
+};
 const addDays = (date: string, n: number) => {
   const d = new Date(`${date}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() + n);
@@ -51,10 +71,14 @@ export const demoModel: ModelProvider = {
           media: w.media.map((m) => ({ ...m, sample: !m.own })),
           profile: w.profile,
         } as unknown as State,
-        w.brief,
+        "",
       )[0];
       const fromTrend = !w.brief && !w.journal.length && perf?.trending[0];
-      const title = fromTrend ? perf.trending[0][0] : idea.title;
+      const title = w.brief
+        ? subject(w.brief)
+        : fromTrend
+          ? perf.trending[0][0]
+          : idea.title;
       return {
         thought: w.brief
           ? `The creator gave a brief (“${w.brief}”), so I’ll build on that rather than pick my own topic.`
@@ -65,9 +89,11 @@ export const demoModel: ModelProvider = {
           call("choose_idea", {
             title,
             hook: idea.hook,
-            reason: fromTrend
-              ? `Up ${perf.trending[0][1]}% this week in the creator's niche.`
-              : `${idea.why} Source: ${idea.source}.`,
+            reason: w.brief
+              ? "Taken from the brief the creator wrote."
+              : fromTrend
+                ? `Up ${perf.trending[0][1]}% this week in the creator's niche.`
+                : `${idea.why} Source: ${idea.source}.`,
           }),
         ],
       };
@@ -100,7 +126,10 @@ export const demoModel: ModelProvider = {
           mediaId: file?.id || "",
           prompt: file
             ? ""
-            : `${beat} — ${title}. ${w.brand.tone} mood, ${w.profile.niche.toLowerCase()} setting, vertical close-up.`,
+            : `${beat}: ${title}. ${w.brief ? `${w.brief.slice(0, 160)}. ` : ""}${w.brand.tone} mood, vertical close-up.`.slice(
+                0,
+                300,
+              ),
           seconds,
           transition: i === 0 ? "Fade" : look.transition,
           motion: look.motions[i % look.motions.length],

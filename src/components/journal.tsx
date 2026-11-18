@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Thumbnail } from "./media";
+import { Dictate, transcribe } from "./dictate";
 import { deleteFile, getFile, putFile } from "@/lib/storage";
 import { analyze, words } from "@/lib/library";
 import type { JournalEntry, Media } from "@/lib/model";
@@ -125,6 +126,11 @@ export default function Journal({
       created = new Date().toISOString();
     try {
       await putFile(id, blob);
+      // A voice note is also saved as text when transcription is connected.
+      const heard =
+        kind === "audio"
+          ? await transcribe(blob).catch(() => undefined)
+          : undefined;
       let item: Media | undefined;
       if (kind !== "audio") {
         const type = kind === "photo" ? "image" : "video";
@@ -142,11 +148,21 @@ export default function Journal({
           ...(await analyze(blob, type)),
         };
       }
-      add({ id, kind, text: note, created }, item);
+      add(
+        {
+          id,
+          kind,
+          text: [note, heard].filter(Boolean).join(" "),
+          created,
+        },
+        item,
+      );
       setText("");
       notify(
         kind === "audio"
-          ? "Voice note saved."
+          ? heard
+            ? "Voice note saved and transcribed."
+            : "Voice note saved."
           : "Saved to the journal and the media library.",
       );
     } catch {
@@ -208,6 +224,14 @@ export default function Journal({
           value={text}
           onChange={(e) => setText(e.target.value)}
         />
+        <div className="dictate-row">
+          <Dictate
+            label="journal entry"
+            notify={notify}
+            onText={(t) => setText((x) => (x ? `${x} ${t}` : t))}
+          />
+          <span className="muted">Speak instead of typing</span>
+        </div>
         {recording ? (
           <div className="journal-recording" role="status">
             {recording === "video" && (

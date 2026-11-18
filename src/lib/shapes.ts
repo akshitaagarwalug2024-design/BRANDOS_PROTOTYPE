@@ -1,4 +1,5 @@
 import type { StockResult } from "./model";
+import { first, stops } from "./colour";
 // Built-in starting set: shapes, badges and callouts. They use currentColor so
 // they can be recoloured like icons.
 const shape = (name: string, box: string, body: string): StockResult => {
@@ -64,12 +65,26 @@ export const shapes: StockResult[] = [
 export const recolourable = (svg?: string) =>
   Boolean(svg && svg.includes("currentColor"));
 // Turns an SVG element into something an <img> or the canvas can draw.
-export const svgUrl = (svg: string, color: string) =>
-  `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
-    svg
-      .replaceAll("currentColor", color)
-      .replace(
-        /<svg(?![^>]*\swidth=)/,
-        '<svg width="512" height="512" preserveAspectRatio="xMidYMid meet"',
-      ),
+export const svgUrl = (svg: string, color: string) => {
+  const list = stops(color);
+  const painted =
+    list.length > 1
+      ? svg
+          .replace(
+            /(<svg[^>]*>)/,
+            `$1<defs><linearGradient id="blend" x1="0" y1="0" x2="1" y2="1">${list
+              .map(
+                (c, i) =>
+                  `<stop offset="${i / (list.length - 1)}" stop-color="${c}"/>`,
+              )
+              .join("")}</linearGradient></defs>`,
+          )
+          .replaceAll("currentColor", "url(#blend)")
+      : svg.replaceAll("currentColor", first(color));
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
+    painted.replace(
+      /<svg(?![^>]*\swidth=)/,
+      '<svg width="512" height="512" preserveAspectRatio="xMidYMid meet"',
+    ),
   )}`;
+};

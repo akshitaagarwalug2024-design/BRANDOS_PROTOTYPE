@@ -11,7 +11,8 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "./ui/button";
-import { Preview } from "./media";
+import { Preview, Thumbnail } from "./media";
+import { Dictate } from "./dictate";
 import { download, putFile } from "@/lib/storage";
 import { analyze } from "@/lib/library";
 import { renderVideo } from "@/lib/render";
@@ -42,6 +43,7 @@ export default function Agent({
   const [topic, setTopic] = useState(""),
     [paid, setPaid] = useState(false),
     [passcode, setPasscode] = useState(""),
+    [attached, setAttached] = useState<string[]>([]),
     [status, setStatus] = useState<
       "idle" | "running" | "rendering" | "done" | "failed"
     >("idle"),
@@ -105,7 +107,8 @@ export default function Agent({
             .slice(-10)
             .map((e) => e.text.slice(0, 500)),
           media: state.media
-            .filter((m) => m.url)
+            .filter((m) => m.url && m.type !== "audio")
+            .filter((m) => !attached.length || attached.includes(m.id))
             .slice(-40)
             .map((m) => ({
               id: m.id,
@@ -113,7 +116,8 @@ export default function Agent({
               type: m.type,
               collection: m.collection,
               tags: m.tags,
-              own: !m.sample,
+              // Media the user attached is always treated as theirs to use.
+              own: attached.length ? true : !m.sample,
             })),
           scheduled: state.projects.map((p) => p.date).filter(Boolean),
         }),
@@ -215,6 +219,11 @@ export default function Agent({
             disabled={busy}
             onChange={(e) => setTopic(e.target.value)}
           />
+          <Dictate
+            label="brief"
+            notify={notify}
+            onText={(t) => setTopic((x) => (x ? `${x} ${t}` : t).slice(0, 200))}
+          />
           {busy ? (
             <Button
               type="button"
@@ -229,6 +238,66 @@ export default function Agent({
             </Button>
           )}
         </form>
+        <details className="card agent-media">
+          <summary>
+            Add media from my library or projects
+            {attached.length ? ` · ${attached.length} attached` : ""}
+          </summary>
+          <p className="muted">
+            Attached files are used first. Scenes they do not cover are
+            generated.
+          </p>
+          {state.projects.length > 0 && (
+            <select
+              aria-label="Add all media from a project"
+              value=""
+              disabled={busy}
+              onChange={(e) => {
+                const project = state.projects.find(
+                  (p) => p.id === e.target.value,
+                );
+                if (project)
+                  setAttached(
+                    [...new Set([...attached, ...project.mediaIds])].slice(
+                      0,
+                      8,
+                    ),
+                  );
+              }}
+            >
+              <option value="">Add all media from a project…</option>
+              {state.projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.title}
+                </option>
+              ))}
+            </select>
+          )}
+          <div className="media-tiles small pick">
+            {state.media
+              .filter((m) => m.url && m.type !== "audio" && !m.stock)
+              .map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  className={`media-tile ${attached.includes(m.id) ? "on" : ""}`}
+                  aria-pressed={attached.includes(m.id)}
+                  aria-label={`Attach ${m.name}`}
+                  title={m.name}
+                  disabled={busy}
+                  onClick={() =>
+                    setAttached(
+                      attached.includes(m.id)
+                        ? attached.filter((id) => id !== m.id)
+                        : [...attached, m.id].slice(0, 8),
+                    )
+                  }
+                >
+                  <Thumbnail media={m} />
+                </button>
+              ))}
+          </div>
+        </details>
         {meta?.paid.available && (
           <div className="card agent-paid">
             <label className="toggle-line">

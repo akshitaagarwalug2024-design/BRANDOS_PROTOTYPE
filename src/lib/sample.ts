@@ -45,8 +45,12 @@ async function frames(m: Media) {
   }
   return { frames: out, duration: Math.round(duration) };
 }
-async function audio(m: Media, seconds: number) {
-  const data = await (await fetch(m.url)).arrayBuffer();
+const audio = async (m: Media, seconds: number) =>
+  wav(await (await fetch(m.url)).arrayBuffer(), seconds);
+// A recording as a small mono WAV, base64-encoded, or undefined if it is silent or unreadable.
+export const wavFromBlob = async (blob: Blob, seconds: number) =>
+  wav(await blob.arrayBuffer(), seconds).catch(() => undefined);
+async function wav(data: ArrayBuffer, seconds: number) {
   const ctx = new AudioContext();
   try {
     const decoded = await ctx.decodeAudioData(data);

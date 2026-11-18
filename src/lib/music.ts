@@ -82,3 +82,7 @@ export function startMusic(
     setTimeout(() => master.disconnect(), 400);
   };
 }
+// Beats per minute of each built-in track, for lining cuts up with the beat.
+export const tempo: Record<string, number> = Object.fromEntries(
+  Object.entries(tracks).map(([name, t]) => [name, t.bpm]),
+);

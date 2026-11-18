@@ -95,6 +95,17 @@ export async function* runAgent(
         return { call, tool, ok, output, ms: Date.now() - began };
       }),
     );
+    // A model that repeats a rejected call unchanged will never get past it.
+    const stuck =
+      results.every((r) => !r.ok) &&
+      results.every((r) =>
+        transcript.some(
+          (e) =>
+            !e.ok &&
+            e.call.name === r.call.name &&
+            JSON.stringify(e.call.args) === JSON.stringify(r.call.args),
+        ),
+      );
     for (const r of results) {
       if (!r.ok) rejected++;
       transcript.push({ call: r.call, ok: r.ok, output: r.output });
@@ -109,6 +120,10 @@ export async function* runAgent(
         output: r.output,
         ms: r.ms,
       };
+    }
+    if (stuck) {
+      summary = `it repeated a rejected ${results[0].call.name} call (${(results[0].output as { error: string }).error})`;
+      break;
     }
   }
   if (

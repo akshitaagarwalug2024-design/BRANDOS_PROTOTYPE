@@ -133,11 +133,26 @@ test("journal shapes ideas with no form; API still rejects invalid input", async
   await expect(
     page.getByRole("heading", { name: "The story behind pottery" }),
   ).toBeVisible();
+  // An idea asks for media first, then offers three versions of that idea.
   await page
     .locator(".ideas-grid")
     .getByRole("button", { name: "Make this post" })
     .first()
     .click();
+  await expect(
+    page.getByRole("heading", {
+      name: "Choose media for “The story behind pottery”",
+    }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Use sample footage" }).click();
+  await expect(page.locator(".quick-version")).toHaveCount(3, {
+    timeout: 60000,
+  });
+  await expect(page.locator(".quick-version b").first()).toHaveText(
+    "The story behind pottery",
+  );
+  await page.locator(".quick-version").first().click();
+  await page.getByRole("button", { name: /Fine-tune/ }).click();
   await expect(page.getByRole("textbox", { name: "Post title" })).toHaveValue(
     "The story behind pottery",
   );
@@ -586,4 +601,72 @@ test("starter ideas, popular topics, own audio, undo and journal folders", async
   const dl = page.waitForEvent("download");
   await page.getByRole("button", { name: "Render & download video" }).click();
   expect((await dl).suggestedFilename()).toBe("unstuck-draft.webm");
+});
+
+test("gradients, beat sync, dictation buttons and agent media", async ({
+  page,
+}) => {
+  await page.goto("/studio/create?id=sample-project");
+  // A blend of colours on an element and on the accent.
+  await page.getByRole("tab", { name: "Elements" }).click();
+  await page.getByRole("button", { name: "Add Star", exact: true }).click();
+  await page.getByRole("button", { name: "Blend in another colour" }).click();
+  await page.getByLabel("Item colour 2").fill("#00ff00");
+  await expect(page.locator(".pv-item img")).toHaveAttribute(
+    "src",
+    /linearGradient/,
+  );
+  await page.getByRole("tab", { name: "Colour" }).click();
+  await page.getByRole("button", { name: "Blend in another colour" }).click();
+  await page.getByLabel("Accent colour 2").fill("#ff8800");
+  await expect(page.locator(".pv-title span")).toHaveAttribute(
+    "style",
+    /linear-gradient/,
+  );
+  // Cuts line up with the beat of the chosen track.
+  await page.getByRole("tab", { name: "Music" }).click();
+  await page.getByRole("button", { name: "Upbeat", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Sync the cuts to the music" })
+    .click();
+  await expect(page.getByText("Cuts follow a 120 BPM beat")).toBeVisible();
+  // Text can be dictated wherever it can be typed.
+  await page.getByRole("tab", { name: "Text" }).click();
+  await expect(
+    page.getByRole("button", { name: "Dictate scene 1 subtitle" }),
+  ).toBeVisible();
+  // The export still renders with a gradient accent and synced cuts.
+  await page.getByRole("tab", { name: "Ask for a change" }).click();
+  await expect(
+    page.getByRole("button", { name: "Dictate revision request" }),
+  ).toBeVisible();
+  await page
+    .getByRole("textbox", { name: "Revision request" })
+    .fill("Shorten this to 3 seconds");
+  await page.getByRole("button", { name: "Apply revision" }).click();
+  await page
+    .getByRole("button", { name: "Caption & export", exact: true })
+    .click();
+  const dl = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Render & download video" }).click();
+  expect((await dl).suggestedFilename()).toBe("unstuck-draft.webm");
+  // The agent can be handed media from the library or a project.
+  await page.getByRole("link", { name: "AI Agent", exact: true }).click();
+  await page.getByText("Add media from my library or projects").click();
+  await page
+    .getByRole("combobox", { name: "Add all media from a project" })
+    .selectOption({ index: 1 });
+  await expect(page.getByText(/3 attached/)).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Dictate brief" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Run the agent" }).click();
+  await expect(page.locator(".trace-tool code").last()).toHaveText(
+    "render_video",
+    { timeout: 30000 },
+  );
+  // Attached media covers every scene, so nothing had to be generated.
+  await expect(
+    page.locator(".trace-tool code", { hasText: "generate_clip" }),
+  ).toHaveCount(0);
 });

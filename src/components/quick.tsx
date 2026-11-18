@@ -10,7 +10,8 @@ import {
   Video,
 } from "lucide-react";
 import { Button } from "./ui/button";
-import { Preview } from "./media";
+import { Preview, Thumbnail } from "./media";
+import { Dictate } from "./dictate";
 import { putFile } from "@/lib/storage";
 import { analyze } from "@/lib/library";
 import { sampleClips } from "@/lib/sample";
@@ -58,20 +59,23 @@ const prompts = [
 ];
 export default function Quick({
   state,
+  idea = "",
   addMedia,
   onApprove,
   onFineTune,
   notify,
 }: {
   state: State;
+  // Set when a content idea is being turned into a post: media is chosen first.
+  idea?: string;
   addMedia: (m: Media[]) => void;
   onApprove: (p: Project, rejected: Project[], requests: string[]) => void;
   onFineTune: (p: Project) => void;
   notify: (s: string) => void;
 }) {
-  const [stage, setStage] = useState<"start" | "working" | "pick" | "review">(
-      "start",
-    ),
+  const [stage, setStage] = useState<
+      "start" | "select" | "working" | "pick" | "review"
+    >(idea ? "select" : "start"),
     [progress, setProgress] = useState(""),
     [versions, setVersions] = useState<Version[]>([]),
     [clips, setClips] = useState<Media[]>([]),
@@ -81,7 +85,8 @@ export default function Quick({
     [request, setRequest] = useState(""),
     [requests, setRequests] = useState<string[]>([]),
     [busy, setBusy] = useState(false),
-    [brief, setBrief] = useState(""),
+    [brief, setBrief] = useState(idea),
+    [picked, setPicked] = useState<string[]>([]),
     [more, setMore] = useState(0);
   const input = useRef<HTMLInputElement>(null),
     camera = useRef<HTMLInputElement>(null);
@@ -121,7 +126,7 @@ export default function Quick({
       const built: Version[] =
         data.mode === "gemini"
           ? (data.variants as Spec[]).map((v) => fromSpec(state, v))
-          : templateVersions(state, files, plan.variants, brief);
+          : templateVersions(state, files, plan.variants, brief, idea);
       setMode(data.mode);
       if (data.problem)
         notify(`AI was unavailable, so templates were used. (${data.problem})`);
@@ -131,7 +136,7 @@ export default function Quick({
       setStage(built.length > 1 ? "pick" : "review");
     } catch (e) {
       notify(e instanceof Error ? e.message : "Could not build versions.");
-      setStage("start");
+      setStage(idea ? "select" : "start");
     }
   };
   const upload = async (list: FileList | null) => {
@@ -239,6 +244,73 @@ export default function Quick({
     }
   };
   const strip = ({ reason: _reason, ...p }: Version): Project => p;
+  if (stage === "select")
+    return (
+      <section className="quick">
+        <div>
+          <h2>Choose media for “{idea}”</h2>
+          <p>
+            Pick the clips and photos to use. UnStuck then makes {plan.variants}{" "}
+            version{plan.variants > 1 ? "s" : ""} for you to choose from.
+          </p>
+        </div>
+        {own.length > 0 ? (
+          <div className="media-tiles small pick">
+            {own.map((m) => (
+              <button
+                key={m.id}
+                className={`media-tile ${picked.includes(m.id) ? "on" : ""}`}
+                aria-pressed={picked.includes(m.id)}
+                aria-label={`Use ${m.name}`}
+                title={m.name}
+                onClick={() =>
+                  setPicked(
+                    picked.includes(m.id)
+                      ? picked.filter((id) => id !== m.id)
+                      : [...picked, m.id].slice(0, 8),
+                  )
+                }
+              >
+                <Thumbnail media={m} />
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p>Your library is empty. Upload clips or use the sample footage.</p>
+        )}
+        <div className="row wrap">
+          <Button
+            disabled={!picked.length}
+            onClick={() => void make(own.filter((m) => picked.includes(m.id)))}
+          >
+            <Check size={16} /> Make {plan.variants} version
+            {plan.variants > 1 ? "s" : ""} from {picked.length || "the"}{" "}
+            selected
+          </Button>
+          <Button variant="outline" onClick={() => input.current?.click()}>
+            <Upload size={15} /> Upload new clips
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => void make(state.media.filter((m) => m.sample))}
+          >
+            Use sample footage
+          </Button>
+        </div>
+        <input
+          ref={input}
+          type="file"
+          accept="video/*,image/*"
+          multiple
+          hidden
+          aria-label="Upload clips"
+          onChange={(e) => {
+            void upload(e.target.files);
+            e.target.value = "";
+          }}
+        />
+      </section>
+    );
   if (stage === "working")
     return (
       <section className="quick quick-working" role="status">
@@ -353,6 +425,11 @@ export default function Quick({
                 maxLength={300}
                 value={request}
                 onChange={(e) => setRequest(e.target.value)}
+              />
+              <Dictate
+                label="change request"
+                notify={notify}
+                onText={(t) => setRequest((r) => (r ? `${r} ${t}` : t))}
               />
               <Button
                 type="submit"

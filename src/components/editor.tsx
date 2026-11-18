@@ -5,6 +5,7 @@ import {
   ArrowRight,
   ArrowUpRight,
   LoaderCircle,
+  AudioLines,
   Redo2,
   Undo2,
   Upload,
@@ -21,6 +22,10 @@ import PostPackage from "./post-package";
 import { ItemControls, StockPanel } from "./stock";
 import { putFile } from "@/lib/storage";
 import { analyze } from "@/lib/library";
+import { detectBpm } from "@/lib/beat";
+import { tempo } from "@/lib/music";
+import { ColourPick } from "./colour";
+import { Dictate } from "./dictate";
 import {
   editSummary,
   looks,
@@ -123,6 +128,36 @@ export default function Editor({
     redraw((n) => n + 1);
   };
   const tracks = state.media.filter((m) => m.type === "audio" && m.url);
+  const [syncing, setSyncing] = useState(false);
+  // Makes every scene last a whole number of beats, so each cut lands on one.
+  const sync = async () => {
+    setSyncing(true);
+    const own = tracks.find((m) => m.id === p.musicId);
+    const bpm =
+      p.music === "My audio"
+        ? own
+          ? await detectBpm(own.url)
+          : 0
+        : tempo[p.music] || 0;
+    setSyncing(false);
+    if (!bpm)
+      return notify(
+        "Could not find a steady beat in that audio, so the cuts were left as they are.",
+      );
+    const beat = 60 / bpm;
+    set({
+      musicBpm: bpm,
+      scenes: p.scenes.map((s) => ({
+        ...s,
+        duration:
+          Math.round(Math.max(2, Math.round(s.duration / beat)) * beat * 100) /
+          100,
+      })),
+    });
+    notify(
+      `Cuts now land on the beat (${bpm} BPM). Undo if you prefer the old timing.`,
+    );
+  };
   const setItem = (id: string, v: Partial<Item>) =>
     set({ items: p.items.map((i) => (i.id === id ? { ...i, ...v } : i)) });
   const current = p.items.find((i) => i.id === sel);
@@ -647,6 +682,13 @@ export default function Editor({
                             setScene(scene.id, { text: e.target.value })
                           }
                         />
+                        <Dictate
+                          label={`scene ${i + 1} subtitle`}
+                          notify={notify}
+                          onText={(text) =>
+                            setScene(scene.id, { text: text.slice(0, 150) })
+                          }
+                        />
                       </label>
                     ))}
                     <Chips
@@ -806,6 +848,41 @@ export default function Editor({
                         }}
                       />
                     </div>
+                    <div className="sync">
+                      <Button
+                        variant="outline"
+
+                        size="sm"
+
+                        disabled={p.music === "None" || syncing}
+
+                        onClick={() => void sync()}
+                      >
+                        <AudioLines size={14} /> Sync the cuts to the music
+                      </Button>
+
+                      <label className="toggle-line">
+                        <input
+                          type="checkbox"
+
+                          checked={p.musicFade !== false}
+
+                          onChange={(e) => set({ musicFade: e.target.checked })}
+                        />{" "}
+                        Fade my audio out at the end
+                      </label>
+
+                      {p.musicBpm ? (
+                        <small className="muted">
+                          Cuts follow a {p.musicBpm} BPM beat
+                          {p.music === "My audio"
+                            ? " (estimated from your file)"
+                            : ""}
+                          .
+                        </small>
+                      ) : null}
+                    </div>
+
                     <label>
                       Music volume
                       <input
@@ -935,15 +1012,11 @@ export default function Editor({
                     </label>
                     <label>
                       Accent colour (title line, call-to-action, progress bar)
-                      <div className="color-input">
-                        <input
-                          type="color"
-                          aria-label="Accent colour"
-                          value={p.accent}
-                          onChange={(e) => set({ accent: e.target.value })}
-                        />
-                        <span>{p.accent}</span>
-                      </div>
+                      <ColourPick
+                        label="Accent colour"
+                        value={p.accent}
+                        onChange={(accent) => set({ accent })}
+                      />
                     </label>
                   </>
                 )}
@@ -955,6 +1028,11 @@ export default function Editor({
                       value={revision}
                       onChange={(e) => setRevision(e.target.value)}
                       placeholder="Describe a change, e.g. Shorten this to 12 seconds"
+                    />
+                    <Dictate
+                      label="revision request"
+                      notify={notify}
+                      onText={(t) => setRevision((r) => (r ? `${r} ${t}` : t))}
                     />
                     <div className="row wrap">
                       {[

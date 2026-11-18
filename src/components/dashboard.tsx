@@ -54,7 +54,8 @@ export function ProjectCard({
           <small>
             {steps[p.step]} ·{" "}
             {p.scenes.length
-              ? p.scenes.reduce((n, s) => n + s.duration, 0) + " sec"
+              ? Math.round(p.scenes.reduce((n, s) => n + s.duration, 0)) +
+                " sec"
               : "New project"}
           </small>
           <span className="project-card-action">

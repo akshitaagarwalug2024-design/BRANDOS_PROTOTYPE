@@ -10823,3 +10823,112 @@ body {
   display: flex;
   gap: 6px;
 }
+/* Colour blends, dictation, sync and media pickers */
+.colour-pick {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.colour-pick input[type="color"] {
+  width: 38px;
+  height: 32px;
+  padding: 2px;
+}
+.colour-pick button {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: #1c2638;
+}
+.colour-pick button:hover {
+  border-color: var(--blue);
+}
+.colour-swatch {
+  width: 46px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+}
+.colour-pick small {
+  color: var(--text-2);
+  font-size: 11px;
+}
+.item-colour {
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  grid-column: 1 / -1;
+}
+.dictate {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--line) !important;
+  border-radius: 8px;
+  background: #fff !important;
+  color: var(--blue);
+}
+.dictate:hover {
+  border-color: var(--blue) !important;
+}
+.dictate.recording {
+  background: #d03a2b !important;
+  border-color: #d03a2b !important;
+  color: #fff;
+}
+.dictate-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.ed-panel label .dictate {
+  margin-top: 4px;
+}
+.sync {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+.sync .toggle-line {
+  margin: 0;
+}
+.media-tiles.pick {
+  max-height: 210px;
+}
+.media-tiles.pick .media-tile.on .media-thumb {
+  outline: 3px solid var(--blue);
+  outline-offset: 1px;
+}
+.agent-media {
+  padding: 12px 14px;
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+}
+.agent-media summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.agent-media select {
+  max-width: 320px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+.agent-media p {
+  margin: 6px 0;
+}
+.agent-start,
+.quick-change {
+  align-items: center;
+}

@@ -66,13 +66,15 @@ export function templateVersions(
   clips: Media[],
   count: number,
   brief = "",
+  // When set, every version keeps this exact title (a chosen content idea).
+  exact = "",
 ): (Project & { reason: string })[] {
   const styles = Object.keys(looks).sort(
     (a, b) => (state.memory.styles[b] || 0) - (state.memory.styles[a] || 0),
   );
   const ideas = suggestIdeas(
     state,
-    brief || clips[0]?.note || "",
+    exact ? "" : brief || clips[0]?.note || "",
     state.projects.length,
   );
   const ids = clips.map((c) => c.id);
@@ -81,7 +83,7 @@ export function templateVersions(
       i === 1 ? [...ids].reverse() : i === 2 ? [...ids.slice(1), ids[0]] : ids;
     const p = autoEdit(
       {
-        ...newProject(state.brand, ideas[i].title),
+        ...newProject(state.brand, exact || ideas[i].title),
         ...format(state),
         mediaIds: order,
       },

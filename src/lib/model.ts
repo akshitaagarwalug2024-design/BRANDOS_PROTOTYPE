@@ -197,6 +197,9 @@ export type Project = {
   music: string;
   // The creator's own audio file, used when music is "My audio".
   musicId?: string;
+  // Tempo used to line cuts up with the beat, and whether the track fades out.
+  musicBpm?: number;
+  musicFade?: boolean;
   musicVolume: number;
   grade: string;
   accent: string;

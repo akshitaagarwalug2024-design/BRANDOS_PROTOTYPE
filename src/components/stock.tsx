@@ -9,6 +9,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Button } from "./ui/button";
+import { ColourPick } from "./colour";
 import {
   options,
   type Item,
@@ -305,15 +306,14 @@ export function ItemControls({
           </select>
         </label>
         {recolourable(item.svg) && (
-          <label>
+          <div className="item-colour">
             Colour
-            <input
-              type="color"
-              aria-label="Item colour"
+            <ColourPick
+              label="Item colour"
               value={item.color}
-              onChange={(e) => change({ color: e.target.value })}
+              onChange={(color) => change({ color })}
             />
-          </label>
+          </div>
         )}
       </div>
       {item.source !== "Built-in" && (

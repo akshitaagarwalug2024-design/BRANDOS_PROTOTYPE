@@ -5,6 +5,7 @@ import { Button } from "./ui/button";
 import { Preview } from "./media";
 import type { Project, State, Status } from "@/lib/model";
 import { download } from "@/lib/storage";
+import { fill } from "@/lib/colour";
 import { renderVideo, coverSvg, contrastText } from "@/lib/render";
 const statuses: Status[] = [
   "Draft",
@@ -82,6 +83,7 @@ export default function PostPackage({
     p.transition,
     p.music,
     p.musicId,
+    p.musicFade,
     p.musicVolume,
     p.grade,
     p.accent,
@@ -266,7 +268,7 @@ export default function PostPackage({
           <div
             className="cover-preview"
             style={{
-              background: state.brand.color,
+              background: fill(state.brand.color),
               color: contrastText(state.brand.color),
             }}
           >

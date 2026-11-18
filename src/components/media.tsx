@@ -25,6 +25,7 @@ import {
   type Brand,
 } from "@/lib/model";
 import { svgUrl } from "@/lib/shapes";
+import { fill } from "@/lib/colour";
 import { startMusic } from "@/lib/music";
 import { contrastText } from "@/lib/render";
 export function Thumbnail({
@@ -659,7 +660,7 @@ export function Preview({
       setTimeout(() => void ctx.close(), 450);
     };
   }, [playing, project.music, project.musicVolume, ownTrack]);
-  const accent = project.accent || brand.color;
+  const accent = fill(project.accent || brand.color);
   const motion = {
     animationDuration: `${scene?.duration || 5}s`,
     animationPlayState: playing ? "running" : "paused",
@@ -832,7 +833,6 @@ export function Preview({
               key={`c${playing}`}
             >
               <b>{project.cta}</b>
-              <small>{project.mark}</small>
             </div>
           )}
         <button
@@ -852,7 +852,7 @@ export function Preview({
           Scene {active + 1} of {Math.max(1, project.scenes.length)}
         </span>
         <span>
-          {total} sec · {project.ratio} ·{" "}
+          {Math.round(total * 10) / 10} sec · {project.ratio} ·{" "}
           {project.music === "None" ? "no music" : `${project.music} music`}
         </span>
       </div>

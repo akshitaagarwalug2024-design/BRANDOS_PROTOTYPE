@@ -58,6 +58,8 @@ import { pickFootage } from "@/lib/library";
 import { MediaLibrary } from "./media";
 import Dashboard, { ProjectCard } from "./dashboard";
 import Agent from "./agent";
+import { ColourPick } from "./colour";
+import { fill } from "@/lib/colour";
 import Quick from "./quick";
 import MemoryEditor from "./memory";
 import Editor from "./editor";
@@ -419,6 +421,51 @@ export default function Studio() {
   const journaled = state.journal.some(
     (e) => new Date(e.created).toDateString() === new Date().toDateString(),
   );
+  // The record/upload flow, also used when a content idea is turned into a post.
+  const quick = (idea = "") => (
+    <Quick
+      key={state.brandId + idea}
+      idea={idea}
+      state={scoped}
+      addMedia={addMedia}
+      notify={notify}
+      onApprove={(project, rejected, requests) => {
+        const review = plans[state.plan].review;
+        const approved: Project = {
+          ...project,
+          step: 1,
+          status: review ? "In Human Review" : "Ready to Publish",
+          brandId: state.brandId,
+        };
+        let memory = learn(state.memory, { approved, rejected });
+        for (const request of requests) memory = learn(memory, { request });
+        setState((s) =>
+          s
+            ? {
+                ...s,
+                projects: [approved, ...s.projects],
+                memory: plans[s.plan].memory ? memory : s.memory,
+              }
+            : s,
+        );
+        notify(
+          review
+            ? "Approved and sent for human review."
+            : "Approved. Caption, hashtags, cover and posting time are ready.",
+        );
+        router.push(`/studio/create?id=${approved.id}`);
+      }}
+      onFineTune={(project) => {
+        const draft = {
+          ...project,
+          step: 0,
+          brandId: state.brandId,
+        };
+        setState((s) => (s ? { ...s, projects: [draft, ...s.projects] } : s));
+        router.push(`/studio/create?id=${draft.id}`);
+      }}
+    />
+  );
   return (
     <div className={`app-shell ${collapsed ? "is-collapsed" : ""}`}>
       <aside className={`sidebar ${mobile ? "mobile-open" : ""}`}>
@@ -684,7 +731,11 @@ export default function Studio() {
                   setState({ ...state, ideas: [...state.ideas, idea] });
                 notify("Idea saved.");
               }}
-              create={create}
+              create={(idea) =>
+                router.push(
+                  `/studio/create?idea=${encodeURIComponent(idea || "")}`,
+                )
+              }
               go={(route) => router.push("/studio/" + route)}
             />
           )}
@@ -711,52 +762,7 @@ export default function Studio() {
           )}
           {(view === "" || view === "journal") && (
             <>
-              {view === "" && (
-                <Quick
-                  key={state.brandId}
-                  state={scoped}
-                  addMedia={addMedia}
-                  notify={notify}
-                  onApprove={(project, rejected, requests) => {
-                    const review = plans[state.plan].review;
-                    const approved: Project = {
-                      ...project,
-                      step: 1,
-                      status: review ? "In Human Review" : "Ready to Publish",
-                      brandId: state.brandId,
-                    };
-                    let memory = learn(state.memory, { approved, rejected });
-                    for (const request of requests)
-                      memory = learn(memory, { request });
-                    setState((s) =>
-                      s
-                        ? {
-                            ...s,
-                            projects: [approved, ...s.projects],
-                            memory: plans[s.plan].memory ? memory : s.memory,
-                          }
-                        : s,
-                    );
-                    notify(
-                      review
-                        ? "Approved and sent for human review."
-                        : "Approved. Caption, hashtags, cover and posting time are ready.",
-                    );
-                    router.push(`/studio/create?id=${approved.id}`);
-                  }}
-                  onFineTune={(project) => {
-                    const draft = {
-                      ...project,
-                      step: 0,
-                      brandId: state.brandId,
-                    };
-                    setState((s) =>
-                      s ? { ...s, projects: [draft, ...s.projects] } : s,
-                    );
-                    router.push(`/studio/create?id=${draft.id}`);
-                  }}
-                />
-              )}
+              {view === "" && quick()}
               {view === "" && (
                 <details className="memory-strip">
                   <summary>
@@ -1116,6 +1122,8 @@ export default function Studio() {
                 notify={notify}
                 finish={() => router.push("/studio/projects")}
               />
+            ) : params.get("idea") ? (
+              quick(params.get("idea")!)
             ) : (
               <section className="create-start">
                 <h2>One click to a finished first edit.</h2>
@@ -1412,15 +1420,11 @@ function BrandKit({ brand, save }: { brand: Brand; save: (b: Brand) => void }) {
           always change them for each post.
         </p>
         <Field label="Brand accent">
-          <div className="color-input">
-            <input
-              type="color"
-              aria-label="Brand accent color"
-              value={b.color}
-              onChange={(e) => setB({ ...b, color: e.target.value })}
-            />
-            <span>{b.color}</span>
-          </div>
+          <ColourPick
+            label="Brand accent color"
+            value={b.color}
+            onChange={(color) => setB({ ...b, color })}
+          />
         </Field>
         <Field label="Logo · PNG, JPEG, or WebP, up to 1 MB">
           <input
@@ -1512,7 +1516,7 @@ function BrandKit({ brand, save }: { brand: Brand; save: (b: Brand) => void }) {
       <aside className="brand-preview">
         <span className="eyebrow">PREVIEW</span>
         <div
-          style={{ background: b.color, color: contrastText(b.color) }}
+          style={{ background: fill(b.color), color: contrastText(b.color) }}
           className={`brand-swatch ${b.font === "Serif" ? "serif" : ""}`}
         >
           {b.logo ? (
