@@ -17,42 +17,43 @@ import {
 } from "lucide-react";
 const demos = [
   {
-    label: "Idea",
-    title: "Start with something small.",
+    label: "Capture",
+    title: "Log what happened today.",
     description:
-      "“I want to share the small rituals that make my mornings more creative.”",
-    note: "An idea is enough to start. You can work out the rest as you go.",
+      "“Packed 40 orders this morning and tested the new gift box.” A note, a voice memo or a short clip is enough.",
+    note: "Entries are saved to the journal and the footage library.",
     icon: Lightbulb,
   },
   {
-    label: "Upload",
-    title: "Bring the moments together.",
-    description: "A coffee ritual. A little room to grow. A work in progress.",
-    note: "Three original sample assets. One collection, ready to reuse.",
+    label: "Understand",
+    title: "Your footage, indexed.",
+    description:
+      "Each file is filed with its folder, tags, shape, length and the note it was captured with.",
+    note: "Indexing uses file properties and your notes, not footage analysis.",
     icon: Upload,
   },
   {
-    label: "Plan",
-    title: "Find a direction that feels right.",
+    label: "Ideate",
+    title: "Ideas matched to what you have.",
     description:
-      "Hook → morning ritual → creative process → a question for your audience.",
-    note: "Demo story structure · template suggestion, not footage analysis.",
+      "Behind the scenes: packing orders → 3 matching clips in your library.",
+    note: "Demo suggestions built from templates, your journal and your industry.",
     icon: Sparkles,
   },
   {
-    label: "Refine",
-    title: "A few thoughtful adjustments.",
+    label: "Create",
+    title: "A finished edit, ready to review.",
     description:
-      "“Use a faster editing style.” Adjust the scene lengths, text, and aspect ratio.",
-    note: "The full studio includes editable scenes and rule-based demo revisions.",
+      "Scenes, captions, music and your brand colours are applied. Change anything beside a live preview.",
+    note: "Every element of the edit stays editable.",
     icon: WandSparkles,
   },
   {
-    label: "Post package",
-    title: "All the finishing touches.",
+    label: "Publish",
+    title: "Approve it and put it on the calendar.",
     description:
-      "A video, a cover, a caption, and hashtags. Ready for your final review.",
-    note: "The full studio exports real WebM drafts and editable post packages.",
+      "Video, cover, caption and hashtags are packaged together and scheduled.",
+    note: "Exports are real video files. Publishing to platforms is manual.",
     icon: Send,
   },
 ];
@@ -114,11 +115,11 @@ export function ProductDemo() {
               className="btn btn-outline"
               onClick={() => setStep((step + 1) % 5)}
             >
-              {step === 4 ? "Replay the flow" : "Next step"}{" "}
+              {step === 4 ? "Start again" : "Next step"}{" "}
               <ArrowRight size={15} />
             </button>
             <Link href="/studio/create?id=sample-project" className="text-link">
-              Try it for yourself <ArrowUpRight size={16} />
+              Open the sample project <ArrowUpRight size={16} />
             </Link>
           </div>
         </div>
@@ -126,16 +127,16 @@ export function ProductDemo() {
           {step === 0 ? (
             <div className="demo-brief">
               <span>
-                <Lightbulb size={18} /> THE BRIEF
+                <Lightbulb size={18} /> TODAY’S ENTRY
               </span>
               <h4>
-                Small rituals.
+                Packing orders,
                 <br />
-                More creativity.
+                behind the scenes.
               </h4>
               <div className="row">
                 <span>Instagram Reels</span>
-                <span>Warm & authentic</span>
+                <span>Professional & clear</span>
               </div>
               <span className="brief-cursor" />
             </div>
@@ -156,17 +157,17 @@ export function ProductDemo() {
           ) : step === 2 ? (
             <div className="demo-plan">
               <span>
-                <Sparkles size={16} /> DEMO STORY DIRECTION
+                <Sparkles size={16} /> SUGGESTED POST
               </span>
               <h4>
-                A day in your
+                How an order
                 <br />
-                creative rhythm.
+                gets packed.
               </h4>
               {[
-                "Open with a small ritual",
-                "Show the creative process",
-                "Invite a little curiosity",
+                "Open on the finished product",
+                "Show the packing process",
+                "Close with how to order",
               ].map((text, i) => (
                 <div key={text}>
                   <b>0{i + 1}</b>
@@ -178,7 +179,7 @@ export function ProductDemo() {
             <div className="demo-edit">
               <div>
                 <img src="/media/morning.svg" alt="Coffee sample preview" />
-                <span>A different kind of morning.</span>
+                <span>Every order is packed by hand.</span>
                 <Play size={22} />
               </div>
               <div className="demo-mini-timeline">
@@ -195,7 +196,7 @@ export function ProductDemo() {
               <span className="package-tick">
                 <Check size={28} />
               </span>
-              <h4>One complete story.</h4>
+              <h4>Post package ready.</h4>
               {[
                 [Film, "Video draft"],
                 [ImageIcon, "Cover image"],

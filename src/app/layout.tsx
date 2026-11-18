@@ -1,15 +1,13 @@
 import type { Metadata } from "next";
-import { Bricolage_Grotesque, DM_Sans } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
-const display = Bricolage_Grotesque({
-  subsets: ["latin"],
-  variable: "--font-display",
-});
-const body = DM_Sans({ subsets: ["latin"], variable: "--font-body" });
+const body = Inter({ subsets: ["latin"], variable: "--font-body" });
+// Read by the video renderer for the "Display" typography option.
+const display = Inter({ subsets: ["latin"], variable: "--font-display" });
 export const metadata: Metadata = {
-  title: "BRANDOS — Your life, already content",
+  title: "UnStuck — Content production for small businesses and agencies",
   description:
-    "Capture a moment a day. BRANDOS turns your journal and footage into finished, on-brand posts.",
+    "UnStuck turns your team's footage and daily notes into finished, on-brand social posts.",
 };
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (

@@ -28,23 +28,21 @@ export default function Auth() {
     <main className="auth-page">
       <div className="auth-art">
         <Link href="/" className="wordmark">
-          brandos®
+          UnStuck
         </Link>
-        <img src="/media/grow.svg" alt="A little room to grow" />
+        <img src="/media/grow.svg" alt="" />
         <h1>
-          Your next story
+          Consistent content,
           <br />
-          starts here.
+          without a content team.
         </h1>
       </div>
       <div className="auth-form">
         <Link href="/" className="text-link">
-          <ArrowLeft size={16} /> Back to BRANDOS
+          <ArrowLeft size={16} /> Back to UnStuck
         </Link>
         <Sparkles size={28} />
-        <h2>
-          {signup ? "Make room for your ideas." : "Welcome back, creator."}
-        </h2>
+        <h2>{signup ? "Create your account" : "Sign in to UnStuck"}</h2>
         <p>
           {supabase
             ? "Sign in to back up your workspace securely."

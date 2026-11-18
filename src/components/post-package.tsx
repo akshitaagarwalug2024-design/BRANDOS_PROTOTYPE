@@ -10,6 +10,7 @@ const statuses: Status[] = [
   "Draft",
   "In Progress",
   "Needs Review",
+  "In Human Review",
   "Ready to Publish",
   "Published",
 ];
@@ -80,6 +81,7 @@ export default function PostPackage({
     p.subtitles,
     p.transition,
     p.music,
+    p.musicId,
     p.musicVolume,
     p.grade,
     p.accent,
@@ -94,12 +96,20 @@ export default function PostPackage({
     state.brand.font,
     state.brand.logo,
     p.captionFx,
+    p.items,
   ]);
   const set = (v: Partial<Project>) => update({ ...p, ...v });
+  // Creator and source of every stock file and element used in this post.
+  const credits = [
+    ...p.items.filter((i) => i.source !== "Built-in"),
+    ...state.media
+      .filter((m) => m.credit && p.scenes.some((s) => s.mediaId === m.id))
+      .map((m) => ({ name: m.name, ...m.credit! })),
+  ];
   const copy = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      notify("Copied. Ready when you are.");
+      notify("Copied to clipboard.");
     } catch {
       notify("Clipboard access is blocked. Select and copy the text manually.");
     }
@@ -118,7 +128,7 @@ export default function PostPackage({
       );
       setVideo(blob);
       setJob({ status: "completed", progress: 100 });
-      download(blob, "brandos-draft.webm");
+      download(blob, "unstuck-draft.webm");
       notify("Actual WebM draft exported. Preview it before posting.");
     } catch (e) {
       setJob({
@@ -181,7 +191,7 @@ export default function PostPackage({
                 disabled={!p.scenes.length}
                 onClick={
                   video
-                    ? () => download(video, "brandos-draft.webm")
+                    ? () => download(video, "unstuck-draft.webm")
                     : exportVideo
                 }
               >
@@ -260,9 +270,9 @@ export default function PostPackage({
               color: contrastText(state.brand.color),
             }}
           >
-            <span>A STORY BY YOU</span>
+            <span>{p.platform.toUpperCase()}</span>
             <h3>{p.coverTitle}</h3>
-            <small>made with brandos.</small>
+            <small>{p.mark}</small>
           </div>
           <Button
             variant="outline"
@@ -272,7 +282,7 @@ export default function PostPackage({
                 new Blob([coverSvg(p.coverTitle, state.brand.color)], {
                   type: "image/svg+xml",
                 }),
-                "brandos-cover.svg",
+                "unstuck-cover.svg",
               )
             }
           >
@@ -283,6 +293,49 @@ export default function PostPackage({
             platform upload requirements before sharing. The cover exports as a
             separate SVG file.
           </p>
+          {p.bestTime && (
+            <p className="notice best-time">
+              <b>Best time to post</b> {p.bestTime}
+            </p>
+          )}
+          {p.status === "In Human Review" && (
+            <div className="notice review">
+              <b>In human review</b> Your editor, Ananya Rao, checks every video
+              before it goes out. No editor is connected in this prototype, so
+              complete the review yourself.
+              <Button
+                size="sm"
+                onClick={() => {
+                  set({ status: "Ready to Publish" });
+                  notify("Review complete. The video is ready to publish.");
+                }}
+              >
+                Mark review complete
+              </Button>
+            </div>
+          )}
+          {credits.length > 0 && (
+            <div className="credits">
+              <b>Credits for stock and elements</b>
+              <ul>
+                {credits.map((c) => (
+                  <li key={c.name + c.creator}>
+                    {c.name} — {c.creator}, {c.source}
+                    {c.link && (
+                      <>
+                        {" "}
+                        (
+                        <a href={c.link} target="_blank" rel="noreferrer">
+                          source
+                        </a>
+                        )
+                      </>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div className="two-col">
             <Field label="Plan a day to share">
               <input
@@ -321,7 +374,7 @@ export default function PostPackage({
                   ],
                   { type: "application/json" },
                 ),
-                "brandos-post-package.json",
+                "unstuck-post-package.json",
               );
               notify(
                 "Post package exported. Keep your source media and video download alongside it.",

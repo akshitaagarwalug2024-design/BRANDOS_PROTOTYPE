@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -157,6 +157,17 @@ export default function Dashboard({
   setGoal: (g: Goal) => void;
 }) {
   const [metric, setMetric] = useState("Reach");
+  // Live weekly trends when a YouTube key is connected; sample data otherwise.
+  const [live, setLive] = useState<{
+    connect?: boolean;
+    items: { title: string; channel: string; url: string }[];
+  } | null>(null);
+  useEffect(() => {
+    void fetch(`/api/trends?niche=${encodeURIComponent(state.profile.niche)}`)
+      .then((r) => r.json())
+      .then(setLive)
+      .catch(() => {});
+  }, [state.profile.niche]);
   const { goal } = state;
   const pct = Math.min(
     100,
@@ -289,16 +300,16 @@ export default function Dashboard({
           <p className="muted">{metrics[metric].note}</p>
         </section>
         <section className="card">
-          <span className="eyebrow">YOU VS SIMILAR CREATORS</span>
+          <span className="eyebrow">YOU VS SIMILAR BUSINESSES</span>
           <h3>
             {competitors[0].engagement >= topEngagement
               ? "You lead on engagement"
-              : "Your engagement beats 2 of 3 similar creators"}
+              : "Your engagement beats 2 of 3 similar accounts"}
           </h3>
           <table className="dash-table">
             <thead>
               <tr>
-                <th>Creator</th>
+                <th>Account</th>
                 <th>Followers</th>
                 <th>Posts / wk</th>
                 <th>Engagement</th>
@@ -326,7 +337,7 @@ export default function Dashboard({
           </table>
           <p className="muted">
             They post more often than you. One extra post a week would match
-            @everyday.edit.
+            @thecornerstore.
           </p>
         </section>
         <section className="card">
@@ -368,19 +379,39 @@ export default function Dashboard({
             TRENDING IN {state.profile.niche.toUpperCase()}
           </span>
           <h3>Topics rising this week</h3>
-          {(
-            trending[state.profile.niche] || trending["Lifestyle & everyday"]
-          ).map(([topic, rise]) => (
-            <div key={topic} className="trend-row">
-              <span>
-                <b>{topic}</b>
-                <small>↑ {rise}% more posts than last week</small>
-              </span>
-              <Button size="sm" variant="outline" onClick={() => create(topic)}>
-                Make this post
-              </Button>
+          {live && live.items.length > 0 && (
+            <div className="trend-live">
+              <b>Most-viewed new Shorts in your industry (YouTube)</b>
+              {live.items.slice(0, 4).map((v) => (
+                <a key={v.url} href={v.url} target="_blank" rel="noreferrer">
+                  {v.title} <small>· {v.channel}</small>
+                </a>
+              ))}
             </div>
-          ))}
+          )}
+          {live?.connect && (
+            <p className="muted">
+              Sample topics. Add YOUTUBE_API_KEY on the server for live weekly
+              trends from YouTube.
+            </p>
+          )}
+          {(trending[state.profile.niche] || trending["Retail & products"]).map(
+            ([topic, rise]) => (
+              <div key={topic} className="trend-row">
+                <span>
+                  <b>{topic}</b>
+                  <small>↑ {rise}% more posts than last week</small>
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => create(topic)}
+                >
+                  Make this post
+                </Button>
+              </div>
+            ),
+          )}
         </section>
         <section className="card dash-recent">
           <div className="row between">

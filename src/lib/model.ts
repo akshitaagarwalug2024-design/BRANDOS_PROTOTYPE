@@ -1,5 +1,85 @@
 export type Status =
-  "Draft" | "In Progress" | "Needs Review" | "Ready to Publish" | "Published";
+  | "Draft"
+  | "In Progress"
+  | "Needs Review"
+  | "In Human Review"
+  | "Ready to Publish"
+  | "Published";
+// What UnStuck has learned about one brand. Sent with every AI request and
+// updated whenever a video is approved, rejected or changed.
+export type Memory = {
+  voice: string;
+  dos: string[];
+  donts: string[];
+  hooks: string[];
+  learned: { text: string; at: string }[];
+  // Approvals minus rejections per editing style.
+  styles: Record<string, number>;
+};
+export const emptyMemory = (): Memory => ({
+  voice: "",
+  dos: [],
+  donts: [],
+  hooks: [],
+  learned: [],
+  styles: {},
+});
+export type Plan = "Starter" | "Pro" | "Premium";
+// Placeholder prices for the prototype. No payment is taken.
+export const plans: Record<
+  Plan,
+  {
+    price: string;
+    variants: number;
+    memory: boolean;
+    review: boolean;
+    points: string[];
+  }
+> = {
+  Starter: {
+    price: "₹999",
+    variants: 1,
+    memory: false,
+    review: false,
+    points: [
+      "8 short-form videos a month",
+      "1 version per upload",
+      "Caption, hashtags, cover and posting time",
+      "1 brand",
+    ],
+  },
+  Pro: {
+    price: "₹2,999",
+    variants: 3,
+    memory: true,
+    review: false,
+    points: [
+      "30 short-form videos a month",
+      "3 versions from every upload",
+      "Brand Memory that learns from approvals",
+      "Up to 5 brands",
+    ],
+  },
+  Premium: {
+    price: "₹7,999",
+    variants: 3,
+    memory: true,
+    review: true,
+    points: [
+      "Everything in Pro",
+      "A named human editor checks every video before it goes out",
+      "Unlimited videos and brands",
+      "Priority support",
+    ],
+  },
+};
+export type SavedBrand = {
+  id: string;
+  name: string;
+  niche: string;
+  brand: Brand;
+  memory: Memory;
+};
 export type Media = {
   id: string;
   name: string;
@@ -15,21 +95,57 @@ export type Media = {
   // Filled in by the library indexer (src/lib/library.ts).
   auto?: string;
   meta?: { w: number; h: number; duration: number; color: string };
+  // Set on files added from stock search, so they are not auto-picked as footage.
+  brandId?: string;
+  stock?: boolean;
+  credit?: { creator: string; source: string; link: string };
+};
+export type ItemKind =
+  "photo" | "video" | "sticker" | "icon" | "illustration" | "shape";
+// A stock or element search result, also what Recent, Favourites and Brand store.
+export type StockResult = {
+  key: string;
+  kind: ItemKind;
+  name: string;
+  thumb: string;
+  src: string;
+  svg?: string;
+  aspect: number;
+  creator: string;
+  source: string;
+  link: string;
+};
+// Something placed on top of the video. Position and width are fractions of the frame.
+export type Item = {
+  id: string;
+  kind: ItemKind;
+  name: string;
+  mediaId?: string;
+  svg?: string;
+  color: string;
+  x: number;
+  y: number;
+  w: number;
+  aspect: number;
+  rot: number;
+  anim: string;
+  // "all", or the id of the one scene it appears in.
+  scene: string;
+  creator: string;
+  source: string;
+  link: string;
 };
 // Platform -> the shape it usually wants. "" means the creator decides.
 export const platforms: Record<string, string> = {
   "Instagram Reels": "9:16",
-  "Instagram Post": "1:1",
-  "Instagram Story": "9:16",
   TikTok: "9:16",
   "YouTube Shorts": "9:16",
-  YouTube: "16:9",
-  Facebook: "1:1",
-  X: "16:9",
-  LinkedIn: "1:1",
-  Snapchat: "9:16",
-  Pinterest: "9:16",
-  Other: "",
+  "Facebook Reels": "9:16",
+  "LinkedIn Video": "9:16",
+  "X Video": "9:16",
+  "Snapchat Spotlight": "9:16",
+  "Pinterest Idea Pin": "9:16",
+  Other: "9:16",
 };
 export type Scene = {
   id: string;
@@ -50,6 +166,8 @@ export type Elements = {
 export type JournalEntry = {
   id: string;
   kind: "text" | "audio" | "video" | "photo";
+  folder?: string;
+  brandId?: string;
   text: string;
   created: string;
 };
@@ -77,6 +195,8 @@ export type Project = {
   transition: string;
   brightness: number;
   music: string;
+  // The creator's own audio file, used when music is "My audio".
+  musicId?: string;
   musicVolume: number;
   grade: string;
   accent: string;
@@ -86,6 +206,11 @@ export type Project = {
   captionFx: string;
   elements: Elements;
   mark: string;
+  items: Item[];
+  brandId?: string;
+  // Which of the generated versions this is, and the suggested posting time.
+  variant?: string;
+  bestTime?: string;
   history: {
     label: string;
     scenes: Scene[];
@@ -125,6 +250,17 @@ export type State = {
   profile: Profile;
   journal: JournalEntry[];
   goal: Goal;
+  stock: {
+    recent: StockResult[];
+    favourites: StockResult[];
+    brand: StockResult[];
+  };
+  // The active brand's kit, niche and memory live in brand/profile/memory;
+  // `brands` keeps a saved copy of every brand so agencies can switch.
+  memory: Memory;
+  plan: Plan;
+  brands: SavedBrand[];
+  brandId: string;
   version?: number;
 };
 export const steps = ["Edit", "Post"];
@@ -163,7 +299,7 @@ export function newProject(brand: Brand, idea = ""): Project {
     title: idea || "Untitled story",
     idea,
     goal: "Build community",
-    audience: "Curious creatives",
+    audience: "Local customers",
     platform: brand.platform,
     tone: brand.tone,
     step: 0,
@@ -172,8 +308,8 @@ export function newProject(brand: Brand, idea = ""): Project {
     concept: 0,
     scenes: [],
     caption: "",
-    hashtags: "#CreativeProcess #BehindTheScenes #MadeWithIntention",
-    cta: "Save this for your next creative morning.",
+    hashtags: "#SmallBusiness #BehindTheScenes #SupportLocal",
+    cta: "Follow for more updates.",
     ratio: brand.ratio,
     subtitles: true,
     style: brand.editing,
@@ -191,7 +327,8 @@ export function newProject(brand: Brand, idea = ""): Project {
     elements: { title: true, progress: true, watermark: true, cta: true },
     mark: brand.handle
       ? `@${brand.handle.replace(/^@/, "")}`
-      : "MADE WITH BRANDOS",
+      : "MADE WITH UNSTUCK",
+    items: [],
     history: [],
     updated: new Date().toISOString(),
     date: "",
@@ -208,35 +345,31 @@ export const defaultBrand: Brand = {
   editing: "Slow & intentional",
 };
 export function initialState(): State {
-  let p = newProject(defaultBrand, "The rhythm of a creative day");
+  let p = newProject(defaultBrand, "A morning at the studio");
   p.mediaIds = ["s1", "s2", "s3"];
   p = autoEdit(p);
   p.id = "sample-project";
   p.scenes = p.scenes.map((s, i) => ({
     ...s,
     id: `scene-${i}`,
-    title: [
-      "Start with a small moment",
-      "Find your rhythm",
-      "Make space for what matters",
-    ][i],
+    title: ["Opening up", "Preparing today’s orders", "Ready for customers"][i],
     text: [
-      "A slower kind of morning.",
-      "A little intention goes a long way.",
-      "What will you create today?",
+      "Doors open at eight.",
+      "Every order is prepared by hand.",
+      "Visit us this week.",
     ][i],
   }));
   p.caption =
-    "A slower morning. A little intention. Something worth sharing. ☕\n\nSave this for a little inspiration.";
-  p.coverTitle = "Create at your own pace";
+    "A look at how each day starts at the studio.\n\nFollow for more updates.";
+  p.coverTitle = "A morning at the studio";
   return {
     projects: [p],
     media: samples,
     ideas: [],
     brand: defaultBrand,
     profile: {
-      name: "Creator",
-      niche: "Lifestyle & everyday",
+      name: "My business",
+      niche: "Retail & products",
       platform: "Instagram Reels",
       experience: "Beginner",
       challenge: "Turning footage into stories",
@@ -245,6 +378,19 @@ export function initialState(): State {
     },
     journal: [],
     goal: { metric: "Followers", current: 6480, target: 10000 },
+    stock: { recent: [], favourites: [], brand: [] },
+    memory: emptyMemory(),
+    plan: "Pro",
+    brands: [
+      {
+        id: "brand-1",
+        name: "My business",
+        niche: "Retail & products",
+        brand: defaultBrand,
+        memory: emptyMemory(),
+      },
+    ],
+    brandId: "brand-1",
     version: 2,
   };
 }
@@ -297,7 +443,7 @@ export function makePlan(p: Project, media: Media[]) {
       trim: 0,
       text: i === 0 ? c.hook : c.outline[i % c.outline.length],
     })),
-    caption: `${c.hook}\n\n${p.idea}. A few moments from the process, made for ${p.audience.toLowerCase()}.\n\n${p.cta}`,
+    caption: `${c.hook}\n\n${p.idea}. A few moments from the process, for ${p.audience.toLowerCase()}.\n\n${p.cta}`,
     coverTitle: p.idea || c.title,
     status: "In Progress" as Status,
   };
@@ -351,6 +497,7 @@ export const options = {
   textStyle: ["Boxed", "Bold", "Minimal"],
   textPosition: ["Top", "Middle", "Bottom"],
   captionFx: ["Highlight", "Plain"],
+  itemAnim: ["None", "Fade in", "Pop", "Slide up", "Pulse"],
   music: ["None", "Calm", "Upbeat", "Dreamy"],
   grade: ["Natural", "Warm", "Cool", "Mono", "Vivid"],
 };
@@ -361,9 +508,16 @@ export function autoEdit(p: Project, style = p.style): Project {
   return {
     ...planned,
     style,
-    scenes: planned.scenes.map((s, i) => ({
+    scenes: planned.scenes.map((s, i, all) => ({
       ...s,
-      duration: look.pace,
+      // Short-form only: keep the whole video between 15 and 60 seconds.
+      duration: Math.max(
+        1,
+        Math.min(
+          Math.floor(60 / all.length),
+          Math.max(look.pace, Math.ceil(15 / all.length)),
+        ),
+      ),
       transition: i === 0 ? "Fade" : look.transition,
       motion: look.motions[i % look.motions.length],
     })),
@@ -404,6 +558,8 @@ export function normalizeState(s: State): State {
       ...raw,
       elements: { ...base.elements, ...raw.elements },
     };
+    if (p.mark === "MADE WITH BRANDOS") p.mark = "MADE WITH UNSTUCK";
+    p.ratio = "9:16";
     if (old) p.step = raw.step >= 4 ? 1 : 0;
     if (!p.scenes.length) {
       if (!p.mediaIds.length)
@@ -413,13 +569,38 @@ export function normalizeState(s: State): State {
     p.step = Math.min(1, Math.max(0, p.step));
     return p;
   });
+  const brandId = s.brandId || "brand-1";
+  const owned = <T extends { brandId?: string }>(list: T[]) =>
+    list.map((x) => (x.brandId ? x : { ...x, brandId }));
   return {
     ...s,
-    projects,
+    memory: { ...emptyMemory(), ...s.memory },
+    plan: s.plan || "Pro",
+    brandId,
+    brands: s.brands?.length
+      ? s.brands
+      : [
+          {
+            id: brandId,
+            name: s.profile.name || "My business",
+            niche: s.profile.niche,
+            brand: s.brand,
+            memory: { ...emptyMemory(), ...s.memory },
+          },
+        ],
+    projects: owned(projects),
+    media: s.media.map((m) => (m.sample || m.brandId ? m : { ...m, brandId })),
     ideas: s.ideas || [],
-    journal: s.journal || [],
+    journal: owned(s.journal || []),
+    stock: s.stock || { recent: [], favourites: [], brand: [] },
     goal: s.goal || { metric: "Followers", current: 6480, target: 10000 },
-    profile: { ...s.profile, onboarded: true },
+    profile: {
+      ...s.profile,
+      niche: nicheTopics[s.profile.niche]
+        ? s.profile.niche
+        : "Retail & products",
+      onboarded: true,
+    },
     version: 2,
   };
 }
@@ -431,11 +612,23 @@ export type Idea = {
   source: string;
 };
 const nicheTopics: Record<string, string[]> = {
-  "Lifestyle & everyday": ["slow mornings", "a weekly reset", "small rituals"],
-  "Education & learning": ["study habits", "learning in public", "one skill"],
-  "Business & products": ["a product launch", "customer stories", "pricing"],
-  "Travel & food": ["a weekend trip", "street food", "a hidden cafe"],
-  "Art & design": ["a work in progress", "my sketchbook", "colour choices"],
+  "Retail & products": ["packing an order", "a new product", "how it is made"],
+  "Food & hospitality": [
+    "the morning prep",
+    "a signature dish",
+    "our suppliers",
+  ],
+  "Professional services": [
+    "a client question",
+    "our process",
+    "a recent project",
+  ],
+  "Health & wellness": ["a first appointment", "a common myth", "our team"],
+  "Education & training": [
+    "a study tip",
+    "a course preview",
+    "student results",
+  ],
 };
 const stop = new Set(
   "about after again also because been being could every from have just know like make more most much need only other people really some than that their them then there these they thing things this want what when where which while will with would your youre post posts posting content create creating right going start started still doing feel into over year years month months week weeks today currently around".split(
@@ -461,7 +654,7 @@ const ideaFormats: [string, (s: string) => string, string, string][] = [
   ],
   [
     "List",
-    (s) => `3 things I learned about ${s}`,
+    (s) => `3 things customers should know about ${s}`,
     "Start here. Keep it simple.",
     "A short list gives people a clear reason to stay and save.",
   ],
@@ -474,7 +667,7 @@ const ideaFormats: [string, (s: string) => string, string, string][] = [
   [
     "Myth buster",
     (s) => `What nobody tells you about ${s}`,
-    "I wish someone had told me this sooner.",
+    "Most people only find this out later.",
     "A surprising angle earns comments and shares.",
   ],
   [
@@ -485,7 +678,7 @@ const ideaFormats: [string, (s: string) => string, string, string][] = [
   ],
   [
     "Tips",
-    (s) => `Beginner mistakes with ${s}`,
+    (s) => `Common mistakes with ${s}`,
     "Avoid these and you’re ahead of most people.",
     "Helpful mistakes-to-avoid posts get saved for later.",
   ],
@@ -506,8 +699,7 @@ export function suggestIdeas(state: State, topic = "", shuffle = 0): Idea[] {
           .slice(0, 2)
           .map((c) => [c.toLowerCase(), "your library"] as [string, string]),
         ...(
-          nicheTopics[state.profile.niche] ||
-          nicheTopics["Lifestyle & everyday"]
+          nicheTopics[state.profile.niche] || nicheTopics["Retail & products"]
         ).map((t) => [t, "your niche"] as [string, string]),
       ];
   return ideaFormats.map((_, i) => {
@@ -516,4 +708,80 @@ export function suggestIdeas(state: State, topic = "", shuffle = 0): Idea[] {
     const [subject, source] = subjects[(i + shuffle * 2) % subjects.length];
     return { title: title(subject), hook, format, why, source };
   });
+}
+
+// Everything UnStuck currently knows about the active brand, as readable facts.
+export function memoryFacts(state: State): string[] {
+  const { brand, memory, profile } = state;
+  const favourite = Object.entries(memory.styles).sort(
+    (a, b) => b[1] - a[1],
+  )[0];
+  return [
+    `Industry: ${profile.niche}`,
+    `Brand colour: ${brand.color}`,
+    `Typography: ${brand.font}`,
+    `Tone: ${brand.tone}`,
+    `Caption style: ${brand.captionStyle}`,
+    ...(brand.logo ? ["Logo on file"] : []),
+    ...(brand.handle ? [`Handle: @${brand.handle.replace(/^@/, "")}`] : []),
+    ...(memory.voice ? [`Voice: ${memory.voice}`] : []),
+    ...memory.dos.map((d) => `Do: ${d}`),
+    ...memory.donts.map((d) => `Don’t: ${d}`),
+    ...memory.hooks.map((h) => `Approved hook: “${h}”`),
+    ...(favourite && favourite[1] > 0
+      ? [`Prefers the “${favourite[0]}” editing style`]
+      : []),
+    ...memory.learned.map((l) => `Learned: ${l.text}`),
+  ];
+}
+// Records an approval, rejection or change request so the next video starts closer.
+export function learn(
+  memory: Memory,
+  event: { approved?: Project; rejected?: Project[]; request?: string },
+): Memory {
+  const styles = { ...memory.styles };
+  const at = new Date().toISOString();
+  let { hooks, learned } = memory;
+  if (event.approved) {
+    styles[event.approved.style] = (styles[event.approved.style] || 0) + 1;
+    const hook = event.approved.scenes[0]?.text;
+    if (hook && !hooks.includes(hook)) hooks = [hook, ...hooks].slice(0, 12);
+  }
+  for (const p of event.rejected || [])
+    styles[p.style] = (styles[p.style] || 0) - 1;
+  if (event.request)
+    learned = [
+      { text: `Asked for: ${event.request.slice(0, 120)}`, at },
+      ...learned,
+    ].slice(0, 20);
+  return { ...memory, styles, hooks, learned };
+}
+const slots: Record<string, string[]> = {
+  "Instagram Reels": ["Thu 7:00 pm", "Tue 12:30 pm", "Sat 10:00 am"],
+  TikTok: ["Tue 8:00 pm", "Fri 6:00 pm", "Sun 11:00 am"],
+  "YouTube Shorts": ["Fri 5:00 pm", "Sat 11:00 am", "Wed 7:00 pm"],
+  "LinkedIn Video": ["Tue 9:00 am", "Wed 12:00 pm", "Thu 8:30 am"],
+};
+// A general guideline per platform, not this account's analytics.
+export function bestPostingTime(platform: string, n = 0) {
+  const list = slots[platform] || slots["Instagram Reels"];
+  return `${list[n % list.length]} · general ${platform in slots ? platform : "short-form"} guideline, not your analytics`;
+}
+// Saves the active brand back into the list, then loads another one.
+export function switchBrand(s: State, id: string): State {
+  const brands = s.brands.map((b) =>
+    b.id === s.brandId
+      ? { ...b, niche: s.profile.niche, brand: s.brand, memory: s.memory }
+      : b,
+  );
+  const next = brands.find((b) => b.id === id);
+  if (!next) return s;
+  return {
+    ...s,
+    brands,
+    brandId: id,
+    brand: next.brand,
+    memory: next.memory,
+    profile: { ...s.profile, niche: next.niche },
+  };
 }

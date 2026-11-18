@@ -90,7 +90,7 @@ export const demoModel: ModelProvider = {
         calls: [],
       };
     if (!boards || needsRepair) {
-      const seconds = needsRepair ? 3 : look.pace;
+      const seconds = needsRepair || w.paidVideo ? 3 : look.pace;
       const scenes: DraftScene[] = beats.map((beat, i) => {
         const file = own[i];
         return {

@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import {
   Camera,
   Flame,
+  Folder,
+  FolderPlus,
   ImagePlus,
   Mic,
   PenLine,
@@ -11,17 +13,18 @@ import {
   WandSparkles,
 } from "lucide-react";
 import { Button } from "./ui/button";
+import { Thumbnail } from "./media";
 import { deleteFile, getFile, putFile } from "@/lib/storage";
 import { analyze, words } from "@/lib/library";
 import type { JournalEntry, Media } from "@/lib/model";
 const questions = [
-  "What’s one small thing that happened today?",
-  "What are you working on right now?",
-  "What made you smile today?",
-  "What did you learn this week?",
-  "Where are you, and what does it look like?",
-  "What’s hard at the moment?",
-  "What are you looking forward to?",
+  "What is coming up in the business next week?",
+  "What did the team work on today?",
+  "What did a customer ask or say this week?",
+  "What are you launching, making or delivering?",
+  "What do customers often get wrong about your work?",
+  "What happened behind the scenes today?",
+  "What result or milestone is worth sharing?",
 ];
 const day = (d: Date | string) => {
   const x = new Date(d);
@@ -51,6 +54,7 @@ export default function Journal({
   media,
   add,
   remove,
+  move,
   makeReel,
   notify,
 }: {
@@ -58,12 +62,24 @@ export default function Journal({
   media: Media[];
   add: (e: JournalEntry, m?: Media) => void;
   remove: (id: string) => void;
+  move: (id: string, folder: string) => void;
   makeReel: () => void;
   notify: (s: string) => void;
 }) {
   const [text, setText] = useState(""),
     [recording, setRecording] = useState<"" | "audio" | "video">(""),
     [seconds, setSeconds] = useState(0);
+  const [folder, setFolder] = useState(""),
+    [extra, setExtra] = useState<string[]>([]),
+    [naming, setNaming] = useState(false),
+    [over, setOver] = useState(""),
+    [open, setOpen] = useState("");
+  // A clip or photo lives in its library folder; notes and voice keep their own.
+  const place = (e: JournalEntry) =>
+    media.find((m) => m.id === e.id)?.collection || e.folder || "Journal";
+  const folders = [...new Set([...entries.map(place), ...extra])];
+  const shown = entries.find((e) => e.id === open);
+  const shownMedia = media.find((m) => m.id === open);
   const recorder = useRef<MediaRecorder | null>(null),
     live = useRef<HTMLVideoElement>(null),
     file = useRef<HTMLInputElement>(null);
@@ -131,7 +147,7 @@ export default function Journal({
       notify(
         kind === "audio"
           ? "Voice note saved."
-          : "Saved to your journal and your footage library.",
+          : "Saved to the journal and the media library.",
       );
     } catch {
       notify("Could not store that. Storage may be full.");
@@ -181,14 +197,14 @@ export default function Journal({
           </span>
           <span className={`streak ${streak ? "on" : ""}`}>
             <Flame size={15} />{" "}
-            {streak ? `${streak}-day streak` : "Start a streak today"}
+            {streak ? `${streak}-day streak` : "No entry yet today"}
           </span>
         </div>
         <h2>{questions[today.getDay()]}</h2>
         <textarea
           aria-label="Journal entry"
           maxLength={2000}
-          placeholder="Say it however you like. A line is enough. Or skip the words and just film it."
+          placeholder="A sentence or two is enough. You can also record or upload instead."
           value={text}
           onChange={(e) => setText(e.target.value)}
         />
@@ -210,8 +226,8 @@ export default function Journal({
               onClick={() => void record("video")}
             >
               <Camera size={22} />
-              <b>Film a clip</b>
-              <small>10 seconds of your day</small>
+              <b>Record a clip</b>
+              <small>A short video update</small>
             </button>
             <button
               className="cap cap-file"
@@ -219,7 +235,7 @@ export default function Journal({
             >
               <ImagePlus size={22} />
               <b>Add photo or video</b>
-              <small>From your camera roll</small>
+              <small>From this device</small>
             </button>
             <button
               className="cap cap-voice"
@@ -227,7 +243,7 @@ export default function Journal({
             >
               <Mic size={22} />
               <b>Voice note</b>
-              <small>Talk it out</small>
+              <small>A quick spoken update</small>
             </button>
             <button
               className="cap cap-note"
@@ -240,12 +256,12 @@ export default function Journal({
                   created: new Date().toISOString(),
                 });
                 setText("");
-                notify("Saved. Your ideas will use this.");
+                notify("Entry saved. It will inform your content ideas.");
               }}
             >
               <PenLine size={22} />
               <b>Save note</b>
-              <small>Just the words</small>
+              <small>Text only</small>
             </button>
             <input
               ref={file}
@@ -301,66 +317,210 @@ export default function Journal({
           <p>
             <b>
               {clips
-                ? `${clips} moment${clips === 1 ? "" : "s"} captured this week.`
-                : "No clips this week yet."}
+                ? `${clips} clip${clips === 1 ? "" : "s"} or photo${clips === 1 ? "" : "s"} logged this week.`
+                : "No clips or photos logged this week."}
             </b>{" "}
             {clips
-              ? "BRANDOS can cut them into a finished reel, with your notes as the captions."
-              : "Film or add one above and BRANDOS can turn your week into a reel."}
+              ? "UnStuck can assemble them into a weekly recap video, using your notes as captions."
+              : "Record or add one above to create a weekly recap video."}
           </p>
           <Button disabled={!clips} onClick={makeReel}>
-            <WandSparkles size={16} /> Turn my week into a reel
+            <WandSparkles size={16} /> Create weekly recap video
           </Button>
         </div>
       </section>
       {entries.length > 0 && (
-        <ol className="journal-list">
-          {[...entries].reverse().map((e) => {
-            const item = media.find((m) => m.id === e.id);
-            return (
-              <li key={e.id} className="card">
-                <div className="row between">
-                  <span className="eyebrow">
-                    {e.kind === "text" ? "NOTE" : e.kind.toUpperCase()} ·{" "}
-                    {new Date(e.created).toLocaleString([], {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    })}
-                  </span>
+        <section className="jr">
+          <div className="jr-folders" role="group" aria-label="Journal folders">
+            {["", ...folders].map((f) => (
+              <button
+                key={f || "all"}
+                className={`${folder === f ? "active" : ""} ${over === f && f ? "over" : ""}`}
+                aria-pressed={folder === f}
+                onClick={() => setFolder(f)}
+                onDragOver={(e) => {
+                  if (!f) return;
+                  e.preventDefault();
+                  setOver(f);
+                }}
+                onDragLeave={() => setOver("")}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setOver("");
+                  const id = e.dataTransfer.getData("text/brandos-entry");
+                  if (id && f) move(id, f);
+                }}
+              >
+                <Folder size={13} /> {f || "All entries"}{" "}
+                <span>
+                  {f
+                    ? entries.filter((e) => place(e) === f).length
+                    : entries.length}
+                </span>
+              </button>
+            ))}
+            {naming ? (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const name = new FormData(e.currentTarget)
+                    .get("name")!
+                    .toString()
+                    .trim();
+                  if (name) {
+                    setExtra([...extra, name]);
+                    setFolder(name);
+                  }
+                  setNaming(false);
+                }}
+              >
+                <input
+                  name="name"
+                  autoFocus
+                  aria-label="New journal folder name"
+                  placeholder="Folder name, then Enter"
+                  maxLength={40}
+                  onBlur={() => setNaming(false)}
+                />
+              </form>
+            ) : (
+              <button className="jr-new" onClick={() => setNaming(true)}>
+                <FolderPlus size={13} /> New folder
+              </button>
+            )}
+          </div>
+          <div className="jr-grid">
+            {[...entries]
+              .reverse()
+              .filter((e) => !folder || place(e) === folder)
+              .map((e) => {
+                const item = media.find((m) => m.id === e.id);
+                return (
                   <button
-                    className="icon-button"
-                    aria-label="Delete entry"
-                    title="Delete entry"
-                    onClick={() => {
-                      if (!confirm("Delete this journal entry?")) return;
-                      if (e.kind === "audio")
-                        void deleteFile(e.id).catch(() => {});
-                      remove(e.id);
-                    }}
+                    key={e.id}
+                    className="jr-tile"
+                    draggable
+                    onDragStart={(ev) =>
+                      ev.dataTransfer.setData("text/brandos-entry", e.id)
+                    }
+                    title={e.text || e.kind}
+                    aria-label={`Open ${e.kind === "text" ? "note" : e.kind} from ${new Date(e.created).toLocaleDateString([], { day: "numeric", month: "short" })}`}
+                    onClick={() => setOpen(e.id)}
                   >
-                    <Trash2 size={14} />
+                    {item?.url && e.kind !== "audio" ? (
+                      <Thumbnail media={item} />
+                    ) : (
+                      <span className="jr-icon">
+                        {e.kind === "audio" ? (
+                          <Mic size={20} />
+                        ) : e.kind === "text" ? (
+                          <PenLine size={20} />
+                        ) : (
+                          <Camera size={20} />
+                        )}
+                      </span>
+                    )}
+                    <small>
+                      {new Date(e.created).toLocaleDateString([], {
+                        day: "numeric",
+                        month: "short",
+                      })}
+                    </small>
+                    <small className="jr-text">
+                      {e.text || (e.kind === "text" ? "" : e.kind)}
+                    </small>
                   </button>
-                </div>
-                {e.kind === "audio" && <Recording id={e.id} />}
-                {e.kind === "video" && item?.url && (
-                  <video src={item.url} controls playsInline />
-                )}
-                {e.kind === "photo" && item?.url && (
-                  <img src={item.url} alt={item.name} />
-                )}
-                {e.text && <p>{e.text}</p>}
-                {item?.auto && (
-                  <small className="muted">Indexed as: {item.auto}</small>
-                )}
-              </li>
-            );
-          })}
-        </ol>
+                );
+              })}
+          </div>
+          {folder && !entries.some((e) => place(e) === folder) && (
+            <p className="muted">
+              This folder is empty. Drag an entry onto it, or open an entry and
+              choose this folder.
+            </p>
+          )}
+        </section>
+      )}
+      {shown && (
+        <div className="modal-backdrop" onClick={() => setOpen("")}>
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-label="Journal entry"
+            className="modal"
+            onClick={(ev) => ev.stopPropagation()}
+          >
+            <button
+              autoFocus
+              className="modal-close"
+              onClick={() => setOpen("")}
+              aria-label="Close entry"
+            >
+              ×
+            </button>
+            <span className="eyebrow">
+              {shown.kind === "text" ? "NOTE" : shown.kind.toUpperCase()} ·{" "}
+              {new Date(shown.created).toLocaleString([], {
+                dateStyle: "medium",
+                timeStyle: "short",
+              })}
+            </span>
+            {shown.kind === "audio" && <Recording id={shown.id} />}
+            {shown.kind === "video" && shownMedia?.url && (
+              <video
+                className="detail-preview"
+                src={shownMedia.url}
+                controls
+                playsInline
+              />
+            )}
+            {shown.kind === "photo" && shownMedia?.url && (
+              <img
+                className="detail-preview"
+                src={shownMedia.url}
+                alt={shownMedia.name}
+              />
+            )}
+            {shown.text && <p>{shown.text}</p>}
+            {shownMedia?.auto && (
+              <small className="muted">Indexed as: {shownMedia.auto}</small>
+            )}
+            <label>
+              Folder
+              <select
+                aria-label="Entry folder"
+                value={place(shown)}
+                onChange={(ev) => move(shown.id, ev.target.value)}
+              >
+                {[...new Set([place(shown), ...folders])].map((f) => (
+                  <option key={f}>{f}</option>
+                ))}
+              </select>
+            </label>
+            <div className="row between">
+              <Button variant="outline" onClick={() => setOpen("")}>
+                Done
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  if (!confirm("Delete this journal entry?")) return;
+                  if (shown.kind === "audio")
+                    void deleteFile(shown.id).catch(() => {});
+                  remove(shown.id);
+                  setOpen("");
+                }}
+              >
+                <Trash2 size={14} /> Delete entry
+              </Button>
+            </div>
+          </section>
+        </div>
       )}
       <p className="muted journal-foot">
-        Everything stays on this device. Notes shape your ideas; clips and
-        photos join your footage library. Voice and video aren’t transcribed
-        yet, so add a line of text if you want the words used.
+        Entries are stored on this device. Notes inform content ideas; clips and
+        photos are added to the media library. Voice and video are not
+        transcribed yet, so add a line of text if the words should be used.
       </p>
     </div>
   );

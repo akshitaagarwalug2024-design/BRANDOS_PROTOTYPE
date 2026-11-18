@@ -1,10 +1,10 @@
-# The BRANDOS agent harness
+# The UnStuck agent harness
 
-The harness is the code that sits between an AI model and the BRANDOS studio. The model decides *what* to do; the harness decides *what it is allowed to do*, runs it, checks it, and shows every step. It lives in `src/lib/agent/` and is used by the **AI Agent** page (`/studio/agent`).
+The harness is the code that sits between an AI model and the UnStuck studio. The model decides *what* to do; the harness decides *what it is allowed to do*, runs it, checks it, and shows every step. It lives in `src/lib/agent/` and is used by the **AI Agent** page (`/studio/agent`).
 
-> **Parked (16 Nov 2026):** the AI Agent page is removed from the studio navigation and routes while the model budget is decided. The code below is intact; re-add `"agent"` to the nav in `src/components/studio.tsx` and the route list in `src/app/studio/[[...view]]/page.tsx` to bring it back.
+> **Video (19 Nov 2026):** real clips can be generated with Gemini Omni 1.2 Flash at 720p (`src/lib/agent/omni.ts`). It is off by default and needs `GEMINI_API_KEY`, `AGENT_PASSCODE` and the on-page toggle, because every clip costs API credit. The model is still the scripted stand-in.
 >
-> **Current status:** both providers are demo stand-ins. The "model" is a scripted policy with no LLM behind it, and the "video model" returns labelled placeholder frames, not AI footage. Everything else — the loop, tool registry, validation, limits, verification gate, streaming trace and final render — is real and does not change when real providers are plugged in.
+> **Demo providers:** both providers are demo stand-ins. The "model" is a scripted policy with no LLM behind it, and the "video model" returns labelled placeholder frames, not AI footage. Everything else — the loop, tool registry, validation, limits, verification gate, streaming trace and final render — is real and does not change when real providers are plugged in.
 
 ## What one run does
 

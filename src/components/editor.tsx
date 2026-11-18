@@ -1,10 +1,13 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
   ArrowUpRight,
   LoaderCircle,
+  Redo2,
+  Undo2,
+  Upload,
   Plus,
   Repeat,
   RotateCcw,
@@ -15,11 +18,16 @@ import {
 import { Button } from "./ui/button";
 import { Preview, Thumbnail, Uploader } from "./media";
 import PostPackage from "./post-package";
+import { ItemControls, StockPanel } from "./stock";
+import { putFile } from "@/lib/storage";
+import { analyze } from "@/lib/library";
 import {
   editSummary,
   looks,
   options,
   platforms,
+  type Item,
+  type StockResult,
   type Media,
   type Project,
   type Scene,
@@ -28,9 +36,10 @@ import {
 const tabs = [
   "Scenes",
   "Text",
+  "Stock",
+  "Elements",
   "Transitions",
   "Music",
-  "Elements",
   "Colour",
   "Ask for a change",
 ];
@@ -68,6 +77,7 @@ export default function Editor({
   state,
   update,
   addMedia,
+  setStock,
   notify,
   finish,
 }: {
@@ -75,6 +85,7 @@ export default function Editor({
   state: State;
   update: (p: Project) => void;
   addMedia: (m: Media[]) => void;
+  setStock: (s: State["stock"]) => void;
   notify: (s: string) => void;
   finish: () => void;
 }) {
@@ -82,9 +93,124 @@ export default function Editor({
     [active, setActive] = useState(0),
     [revision, setRevision] = useState(""),
     [tab, setTab] = useState(tabs[0]),
+    [sel, setSel] = useState(""),
+    [adding, setAdding] = useState(""),
     // Scene index being re-pointed at another file; -1 adds a new scene.
     [picker, setPicker] = useState<number | null>(null);
-  const set = (v: Partial<Project>) => update({ ...p, ...v });
+  // Undo history for this editing session. Quick successive changes (typing,
+  // dragging a slider) are grouped into one step.
+  const past = useRef<Project[]>([]),
+    future = useRef<Project[]>([]),
+    stamp = useRef(0),
+    audioInput = useRef<HTMLInputElement>(null);
+  const [, redraw] = useState(0);
+  const set = (v: Partial<Project>) => {
+    if (Date.now() - stamp.current > 700) {
+      past.current = [...past.current, p].slice(-60);
+      future.current = [];
+      redraw((n) => n + 1);
+    }
+    stamp.current = Date.now();
+    update({ ...p, ...v });
+  };
+  const travel = (from: typeof past, to: typeof past) => {
+    const target = from.current.pop();
+    if (!target) return;
+    to.current.push(p);
+    stamp.current = 0;
+    update(target);
+    setSel("");
+    redraw((n) => n + 1);
+  };
+  const tracks = state.media.filter((m) => m.type === "audio" && m.url);
+  const setItem = (id: string, v: Partial<Item>) =>
+    set({ items: p.items.map((i) => (i.id === id ? { ...i, ...v } : i)) });
+  const current = p.items.find((i) => i.id === sel);
+  // Adds a search result to the video, keeping a local copy of any file.
+  const addStock = async (r: StockResult, asScene = false) => {
+    setAdding(r.key);
+    try {
+      let mediaId: string | undefined;
+      if (!r.svg) {
+        const response = await fetch(
+          `/api/stock/file?u=${encodeURIComponent(r.src)}`,
+        );
+        if (!response.ok) throw Error();
+        const blob = await response.blob();
+        const type = blob.type.startsWith("video") ? "video" : "image";
+        mediaId = crypto.randomUUID();
+        await putFile(mediaId, blob);
+        addMedia([
+          {
+            id: mediaId,
+            name: r.name.slice(0, 60) || r.kind,
+            type,
+            url: URL.createObjectURL(blob),
+            collection: "Stock",
+            tags: r.kind,
+            size: blob.size,
+            stock: !asScene,
+            credit: { creator: r.creator, source: r.source, link: r.link },
+            ...(await analyze(blob, type)),
+          },
+        ]);
+      }
+      if (asScene && mediaId) {
+        const look = looks[p.style] || looks["Slow & intentional"];
+        set({
+          mediaIds: [...p.mediaIds, mediaId],
+          scenes: [
+            ...p.scenes,
+            {
+              id: crypto.randomUUID(),
+              mediaId,
+              title: r.name.slice(0, 60),
+              duration: look.pace,
+              trim: 0,
+              text: "",
+              transition: look.transition,
+              motion: look.motions[p.scenes.length % look.motions.length],
+            },
+          ],
+        });
+        setActive(p.scenes.length);
+        notify("Added as a new scene.");
+      } else {
+        const item: Item = {
+          id: crypto.randomUUID(),
+          kind: r.kind,
+          name: r.name.slice(0, 60) || r.kind,
+          mediaId,
+          svg: r.svg,
+          color: p.accent,
+          // Step each new item down and right so they do not stack exactly.
+          x: 0.4 + 0.08 * (p.items.length % 4),
+          y: 0.4 + 0.08 * (p.items.length % 4),
+          w: r.kind === "photo" || r.kind === "video" ? 0.6 : 0.3,
+          aspect: r.aspect || 1,
+          rot: 0,
+          anim: "Pop",
+          scene: p.scenes[active]?.id || "all",
+          creator: r.creator,
+          source: r.source,
+          link: r.link,
+        };
+        set({ items: [...p.items, item] });
+        setSel(item.id);
+      }
+      setStock({
+        ...state.stock,
+        recent: [r, ...state.stock.recent.filter((x) => x.key !== r.key)].slice(
+          0,
+          24,
+        ),
+      });
+    } catch {
+      notify("Could not add that item. Try another one.");
+    } finally {
+      setAdding("");
+    }
+  };
   const setScene = (id: string, v: Partial<Scene>) =>
     set({ scenes: p.scenes.map((s) => (s.id === id ? { ...s, ...v } : s)) });
   const total = p.scenes.reduce((n, s) => n + s.duration, 0);
@@ -189,6 +315,9 @@ export default function Editor({
   return (
     <div className="wizard">
       <div className="wizard-top">
+        <Button variant="ghost" size="sm" onClick={finish}>
+          <ArrowLeft size={15} /> Back
+        </Button>
         <input
           className="title-input"
           aria-label="Post title"
@@ -196,6 +325,24 @@ export default function Editor({
           value={p.title}
           onChange={(e) => set({ title: e.target.value })}
         />
+        <div className="undo-redo">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!past.current.length}
+            onClick={() => travel(past, future)}
+          >
+            <Undo2 size={14} /> Undo
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!future.current.length}
+            onClick={() => travel(future, past)}
+          >
+            <Redo2 size={14} /> Redo
+          </Button>
+        </div>
         <div className="segmented" role="group" aria-label="Stage">
           <button
             className={p.step === 0 ? "active" : ""}
@@ -262,12 +409,7 @@ export default function Editor({
                 />
               </label>
             )}
-            <Chips
-              label="Shape"
-              value={p.ratio}
-              items={["9:16", "1:1", "16:9"]}
-              onChange={(ratio) => set({ ratio })}
-            />
+            <span className="muted">Vertical 9:16 · 15–60 seconds</span>
           </div>
           <div className="editor-grid ed-grid">
             <div className="editor-preview">
@@ -277,6 +419,12 @@ export default function Editor({
                 brand={state.brand}
                 active={active}
                 onActive={setActive}
+                selected={sel}
+                onSelect={(id) => {
+                  setSel(id);
+                  if (id && tab !== "Stock") setTab("Elements");
+                }}
+                onItem={setItem}
               />
               <div className="timeline" aria-label="Scene timeline">
                 {p.scenes.map((s, i) => (
@@ -586,9 +734,78 @@ export default function Editor({
                     <Chips
                       label="Backing track"
                       value={p.music}
-                      items={options.music}
+                      items={[
+                        ...options.music,
+                        ...(p.musicId ? ["My audio"] : []),
+                      ]}
                       onChange={(music) => set({ music })}
                     />
+                    <div className="own-audio">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => audioInput.current?.click()}
+                      >
+                        <Upload size={14} /> Upload my own music or audio
+                      </Button>
+                      {tracks.length > 0 && (
+                        <select
+                          aria-label="My audio files"
+                          value={p.music === "My audio" ? p.musicId : ""}
+                          onChange={(e) =>
+                            e.target.value &&
+                            set({ music: "My audio", musicId: e.target.value })
+                          }
+                        >
+                          <option value="">Use an earlier upload…</option>
+                          {tracks.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      <input
+                        ref={audioInput}
+                        type="file"
+                        accept="audio/*"
+                        hidden
+                        aria-label="Upload my own music or audio"
+                        onChange={async (e) => {
+                          const f = e.target.files?.[0];
+                          e.target.value = "";
+                          if (!f) return;
+                          if (
+                            !f.type.startsWith("audio/") ||
+                            f.size > 50 * 1048576
+                          )
+                            return notify(
+                              "Choose an audio file under 50 MB (MP3, WAV, M4A or OGG).",
+                            );
+                          try {
+                            const id = crypto.randomUUID();
+                            await putFile(id, f);
+                            addMedia([
+                              {
+                                id,
+                                name: f.name,
+                                type: "audio",
+                                url: URL.createObjectURL(f),
+                                collection: "Audio",
+                                tags: "music",
+                                size: f.size,
+                              },
+                            ]);
+                            set({ music: "My audio", musicId: id });
+                            notify(
+                              "Your audio is now the soundtrack. Only use music you have the rights to.",
+                            );
+                          } catch {
+                            notify("Could not store that file.");
+                          }
+                        }}
+                      />
+                    </div>
                     <label>
                       Music volume
                       <input
@@ -623,44 +840,76 @@ export default function Editor({
                     </p>
                   </>
                 )}
+                {(tab === "Stock" || tab === "Elements") && (
+                  <>
+                    {current && (
+                      <ItemControls
+                        item={current}
+                        project={p}
+                        change={(v) => setItem(current.id, v)}
+                        remove={() => {
+                          set({
+                            items: p.items.filter((i) => i.id !== current.id),
+                          });
+                          setSel("");
+                        }}
+                      />
+                    )}
+                    <StockPanel
+                      key={tab}
+                      start={tab === "Stock" ? "photo" : "shape"}
+                      stock={state.stock}
+                      busy={adding}
+                      onAdd={(r) => void addStock(r)}
+                      onScene={(r) => void addStock(r, true)}
+                      onStock={setStock}
+                    />
+                  </>
+                )}
                 {tab === "Elements" && (
                   <>
-                    {(
-                      [
-                        ["title", "Opening title", "coverTitle"],
-                        ["cta", "Call-to-action on the last scene", "cta"],
-                        ["watermark", "Watermark in the corner", "mark"],
-                        ["progress", "Progress bar along the top", ""],
-                      ] as const
-                    ).map(([key, label, field]) => (
-                      <div key={key} className="ed-element">
-                        <label className="toggle-line">
-                          <input
-                            type="checkbox"
-                            checked={p.elements[key]}
-                            onChange={(e) => {
-                              set({
-                                elements: {
-                                  ...p.elements,
-                                  [key]: e.target.checked,
-                                },
-                              });
-                              if (key === "title") setActive(0);
-                              if (key === "cta") setActive(p.scenes.length - 1);
-                            }}
-                          />{" "}
-                          {label}
-                        </label>
-                        {field && p.elements[key] && (
-                          <input
-                            aria-label={`${label} text`}
-                            maxLength={130}
-                            value={p[field]}
-                            onChange={(e) => set({ [field]: e.target.value })}
-                          />
-                        )}
-                      </div>
-                    ))}
+                    <details className="ed-builtin" open>
+                      <summary>
+                        Title, call-to-action, watermark and progress bar
+                      </summary>
+                      {(
+                        [
+                          ["title", "Opening title", "coverTitle"],
+                          ["cta", "Call-to-action on the last scene", "cta"],
+                          ["watermark", "Watermark in the corner", "mark"],
+                          ["progress", "Progress bar along the top", ""],
+                        ] as const
+                      ).map(([key, label, field]) => (
+                        <div key={key} className="ed-element">
+                          <label className="toggle-line">
+                            <input
+                              type="checkbox"
+                              checked={p.elements[key]}
+                              onChange={(e) => {
+                                set({
+                                  elements: {
+                                    ...p.elements,
+                                    [key]: e.target.checked,
+                                  },
+                                });
+                                if (key === "title") setActive(0);
+                                if (key === "cta")
+                                  setActive(p.scenes.length - 1);
+                              }}
+                            />{" "}
+                            {label}
+                          </label>
+                          {field && p.elements[key] && (
+                            <input
+                              aria-label={`${label} text`}
+                              maxLength={130}
+                              value={p[field]}
+                              onChange={(e) => set({ [field]: e.target.value })}
+                            />
+                          )}
+                        </div>
+                      ))}
+                    </details>
                   </>
                 )}
                 {tab === "Colour" && (

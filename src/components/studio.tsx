@@ -26,6 +26,7 @@ import {
   ExternalLink,
   CheckCircle2,
   NotebookPen,
+  Brain,
   Bot,
   WandSparkles,
 } from "lucide-react";
@@ -36,6 +37,13 @@ import {
   autoEdit,
   normalizeState,
   suggestIdeas,
+  switchBrand,
+  learn,
+  memoryFacts,
+  emptyMemory,
+  defaultBrand,
+  plans,
+  type Plan,
   type JournalEntry,
   type State,
   type Project,
@@ -49,13 +57,17 @@ import { supabase } from "@/lib/supabase";
 import { pickFootage } from "@/lib/library";
 import { MediaLibrary } from "./media";
 import Dashboard, { ProjectCard } from "./dashboard";
+import Agent from "./agent";
+import Quick from "./quick";
+import MemoryEditor from "./memory";
 import Editor from "./editor";
 import Ideas from "./ideas";
 import Journal from "./journal";
 import Publishing from "./publishing";
 const nav = [
-  ["", "Journal", NotebookPen],
+  ["", "Home", NotebookPen],
   ["create", "Create", Plus],
+  ["agent", "AI Agent", Bot],
   ["projects", "My Projects", FolderOpen],
   ["media", "Media Library", Images],
   ["ideas", "Content Ideas", Lightbulb],
@@ -68,6 +80,7 @@ const statuses: Status[] = [
   "Draft",
   "In Progress",
   "Needs Review",
+  "In Human Review",
   "Ready to Publish",
   "Published",
 ];
@@ -257,7 +270,7 @@ export default function Studio() {
     const topic =
       idea ||
       suggestIdeas(state, "", state.projects.length)[0]?.title ||
-      "A slower kind of morning";
+      "Behind the scenes this week";
     const last = state.projects[0];
     const format = {
       platform: last?.platform || "Instagram Reels",
@@ -265,7 +278,11 @@ export default function Studio() {
     };
     const matched = sample
       ? []
-      : pickFootage(topic, state.media, format.ratio).map((m) => m.media.id);
+      : pickFootage(
+          topic,
+          state.media.filter((m) => m.brandId === state.brandId),
+          format.ratio,
+        ).map((m) => m.media.id);
     const mediaIds =
       ids ||
       (matched.length
@@ -274,6 +291,7 @@ export default function Studio() {
     const p = {
       ...autoEdit({ ...newProject(state.brand, topic), ...format, mediaIds }),
       date,
+      brandId: state.brandId,
     };
     setState({ ...state, projects: [p, ...state.projects] });
     router.push(`/studio/create?id=${p.id}`);
@@ -284,6 +302,7 @@ export default function Studio() {
     const since = Date.now() - 7 * 864e5;
     const entries = state.journal.filter(
       (e) =>
+        e.brandId === state.brandId &&
         (e.kind === "video" || e.kind === "photo") &&
         Date.parse(e.created) >= since &&
         state.media.some((m) => m.id === e.id && m.url),
@@ -296,6 +315,7 @@ export default function Studio() {
       platform: last?.platform || "Instagram Reels",
       ratio: last?.ratio || "9:16",
       mediaIds: entries.slice(-6).map((e) => e.id),
+      brandId: state.brandId,
     });
     p = {
       ...p,
@@ -321,19 +341,29 @@ export default function Studio() {
     router.push(`/studio/create?id=${p.id}`);
   };
   const addMedia = (items: Media[]) =>
-    setState((s) => (s ? { ...s, media: [...s.media, ...items] } : s));
+    setState((s) =>
+      s
+        ? {
+            ...s,
+            media: [
+              ...s.media,
+              ...items.map((m) => ({ ...m, brandId: s.brandId })),
+            ],
+          }
+        : s,
+    );
   const p = state?.projects.find((p) => p.id === params.get("id"));
   if (!state)
     return (
       <div className="loading-screen">
         <Sparkles />
-        <h2>Opening your creative space…</h2>
+        <h2>Loading your workspace…</h2>
       </div>
     );
   const subheads: Record<string, [string, string]> = {
     "": [
-      "Journal",
-      "Capture a moment from your day. BRANDOS turns your journal into ideas and finished posts.",
+      "Home",
+      "Record or upload clips and UnStuck turns them into a finished short-form video.",
     ],
     insights: [
       "Dashboard",
@@ -349,11 +379,11 @@ export default function Studio() {
     ],
     ideas: [
       "Content Ideas",
-      "Ready-made post ideas. Pick one and BRANDOS builds the first edit for you.",
+      "Ready-made post ideas. Pick one and UnStuck builds the first edit for you.",
     ],
     journal: [
       "Journal",
-      "Tell BRANDOS about your goals, why you post and where you are now — by text, voice or video.",
+      "Log what happened in the business today. UnStuck turns these entries into ideas and finished posts.",
     ],
     publishing: [
       "Publishing Hub",
@@ -370,10 +400,22 @@ export default function Studio() {
     ],
     create: [
       "Create",
-      "BRANDOS builds a ready-to-post edit first. Then change anything you like.",
+      "UnStuck builds a ready-to-post edit first. Then change anything you like.",
     ],
   };
   const head = subheads[view] || subheads[""];
+  // Everything below the shell only sees the active brand's work.
+  const mine = (x: { brandId?: string }) =>
+    !x.brandId || x.brandId === state.brandId;
+  const scoped: State = {
+    ...state,
+    projects: state.projects.filter(mine),
+    media: state.media.filter((m) => m.sample || mine(m)),
+    journal: state.journal.filter(mine),
+  };
+  const facts = memoryFacts(state);
+  const brandName =
+    state.brands.find((b) => b.id === state.brandId)?.name || "this brand";
   const journaled = state.journal.some(
     (e) => new Date(e.created).toDateString() === new Date().toDateString(),
   );
@@ -381,7 +423,7 @@ export default function Studio() {
     <div className={`app-shell ${collapsed ? "is-collapsed" : ""}`}>
       <aside className={`sidebar ${mobile ? "mobile-open" : ""}`}>
         <Link href="/" className="wordmark">
-          {collapsed ? "B" : "BRANDOS"}
+          {collapsed ? "U" : "UnStuck"}
           <span className="studio-edition">STUDIO</span>
         </Link>
         <button
@@ -400,10 +442,56 @@ export default function Studio() {
           {!collapsed && (
             <div>
               <b>My workspace</b>
-              <small>Personal workspace</small>
+              <small>{state.plan} plan</small>
             </div>
           )}
         </div>
+        {!collapsed && (
+          <label className="brand-switch">
+            Brand
+            <select
+              aria-label="Active brand"
+              value={state.brandId}
+              onChange={(e) => {
+                if (e.target.value !== "+") {
+                  setState(switchBrand(state, e.target.value));
+                } else {
+                  const name = prompt(
+                    "Name of the new brand or client",
+                  )?.trim();
+                  if (!name) return;
+                  const id = crypto.randomUUID();
+                  const kept = switchBrand(state, state.brandId);
+                  setState({
+                    ...kept,
+                    brands: [
+                      ...kept.brands,
+                      {
+                        id,
+                        name,
+                        niche: kept.profile.niche,
+                        brand: defaultBrand,
+                        memory: emptyMemory(),
+                      },
+                    ],
+                    brandId: id,
+                    brand: defaultBrand,
+                    memory: emptyMemory(),
+                  });
+                  notify(`“${name}” added. Set up its Brand Kit next.`);
+                }
+                router.push("/studio");
+              }}
+            >
+              {state.brands.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+              <option value="+">+ Add a brand or client</option>
+            </select>
+          </label>
+        )}
         <span className="nav-label">WORKSPACE</span>
         <nav>
           {nav.map(([key, label, Icon]) => (
@@ -483,7 +571,7 @@ export default function Studio() {
           <div className="row">
             {view !== "" && view !== "journal" && !journaled && (
               <Link className="journal-nudge" href="/studio">
-                <NotebookPen size={13} /> Add today’s moment
+                <NotebookPen size={13} /> Add today’s entry
               </Link>
             )}
             <span className={`save-state ${storageError ? "error" : ""}`}>
@@ -516,7 +604,7 @@ export default function Studio() {
           </div>
           {view === "insights" && (
             <Dashboard
-              state={state}
+              state={scoped}
               create={create}
               open={(id) => router.push(`/studio/create?id=${id}`)}
               go={(route) => router.push("/studio/" + route)}
@@ -525,7 +613,7 @@ export default function Studio() {
           )}
           {view === "projects" && (
             <Projects
-              state={state}
+              state={scoped}
               open={(id) => router.push(`/studio/create?id=${id}`)}
               onDelete={(id) => {
                 setState({
@@ -538,7 +626,7 @@ export default function Studio() {
           )}
           {view === "media" && (
             <MediaLibrary
-              media={state.media}
+              media={scoped.media}
               onAdd={addMedia}
               onChange={(m) =>
                 setState({
@@ -590,7 +678,7 @@ export default function Studio() {
           )}
           {view === "ideas" && (
             <Ideas
-              state={state}
+              state={scoped}
               save={(idea) => {
                 if (!state.ideas.includes(idea))
                   setState({ ...state, ideas: [...state.ideas, idea] });
@@ -600,41 +688,153 @@ export default function Studio() {
               go={(route) => router.push("/studio/" + route)}
             />
           )}
-          {(view === "" || view === "journal") && (
-            <Journal
-              entries={state.journal}
-              media={state.media}
-              add={(entry, item) =>
+          {view === "agent" && (
+            <Agent
+              state={scoped}
+              onResult={(project, media) =>
                 setState((s) =>
                   s
                     ? {
                         ...s,
-                        journal: [...s.journal, entry],
-                        media: item ? [...s.media, item] : s.media,
+                        media: [...s.media, ...media],
+                        projects: [
+                          { ...project, brandId: s.brandId },
+                          ...s.projects,
+                        ],
                       }
                     : s,
                 )
               }
-              remove={(id) => {
-                const used = state.projects.some((p) =>
-                  p.scenes.some((s) => s.mediaId === id),
-                );
-                if (!used) void deleteFile(id).catch(() => {});
-                setState({
-                  ...state,
-                  journal: state.journal.filter((e) => e.id !== id),
-                  media: used
-                    ? state.media
-                    : state.media.filter((m) => m.id !== id),
-                });
-              }}
-              makeReel={createFromJournal}
+              open={(id) => router.push(`/studio/create?id=${id}`)}
               notify={notify}
             />
           )}
+          {(view === "" || view === "journal") && (
+            <>
+              {view === "" && (
+                <Quick
+                  key={state.brandId}
+                  state={scoped}
+                  addMedia={addMedia}
+                  notify={notify}
+                  onApprove={(project, rejected, requests) => {
+                    const review = plans[state.plan].review;
+                    const approved: Project = {
+                      ...project,
+                      step: 1,
+                      status: review ? "In Human Review" : "Ready to Publish",
+                      brandId: state.brandId,
+                    };
+                    let memory = learn(state.memory, { approved, rejected });
+                    for (const request of requests)
+                      memory = learn(memory, { request });
+                    setState((s) =>
+                      s
+                        ? {
+                            ...s,
+                            projects: [approved, ...s.projects],
+                            memory: plans[s.plan].memory ? memory : s.memory,
+                          }
+                        : s,
+                    );
+                    notify(
+                      review
+                        ? "Approved and sent for human review."
+                        : "Approved. Caption, hashtags, cover and posting time are ready.",
+                    );
+                    router.push(`/studio/create?id=${approved.id}`);
+                  }}
+                  onFineTune={(project) => {
+                    const draft = {
+                      ...project,
+                      step: 0,
+                      brandId: state.brandId,
+                    };
+                    setState((s) =>
+                      s ? { ...s, projects: [draft, ...s.projects] } : s,
+                    );
+                    router.push(`/studio/create?id=${draft.id}`);
+                  }}
+                />
+              )}
+              {view === "" && (
+                <details className="memory-strip">
+                  <summary>
+                    <Brain size={15} />
+                    {plans[state.plan].memory
+                      ? `UnStuck remembers ${facts.length} things about ${brandName}`
+                      : "Brand Memory is part of the Pro plan"}
+                  </summary>
+                  <ul>
+                    {facts.map((f) => (
+                      <li key={f}>{f}</li>
+                    ))}
+                  </ul>
+                  <button
+                    className="text-link"
+                    onClick={() => router.push("/studio/brand")}
+                  >
+                    Edit Brand Memory
+                  </button>
+                </details>
+              )}
+              <h2 className="section-title">Journal</h2>
+              <Journal
+                entries={scoped.journal}
+                media={scoped.media}
+                add={(entry, item) =>
+                  setState((s) =>
+                    s
+                      ? {
+                          ...s,
+                          journal: [
+                            ...s.journal,
+                            { ...entry, brandId: s.brandId },
+                          ],
+
+                          media: item
+                            ? [...s.media, { ...item, brandId: s.brandId }]
+                            : s.media,
+                        }
+                      : s,
+                  )
+                }
+                remove={(id) => {
+                  const used = state.projects.some((p) =>
+                    p.scenes.some((s) => s.mediaId === id),
+                  );
+                  if (!used) void deleteFile(id).catch(() => {});
+                  setState({
+                    ...state,
+                    journal: state.journal.filter((e) => e.id !== id),
+                    media: used
+                      ? state.media
+                      : state.media.filter((m) => m.id !== id),
+                  });
+                }}
+                move={(id, folder) =>
+                  setState((s) =>
+                    s
+                      ? {
+                          ...s,
+                          journal: s.journal.map((e) =>
+                            e.id === id ? { ...e, folder } : e,
+                          ),
+                          media: s.media.map((x) =>
+                            x.id === id ? { ...x, collection: folder } : x,
+                          ),
+                        }
+                      : s,
+                  )
+                }
+                makeReel={createFromJournal}
+                notify={notify}
+              />
+            </>
+          )}
           {view === "publishing" && (
             <Publishing
-              state={state}
+              state={scoped}
               update={updateProject}
               open={(id) => router.push(`/studio/create?id=${id}`)}
               create={create}
@@ -642,21 +842,53 @@ export default function Studio() {
             />
           )}
           {view === "brand" && (
-            <BrandKit
-              brand={state.brand}
-              save={(brand) => {
-                setState({ ...state, brand });
-                notify(
-                  "Brand kit saved. New projects will use these defaults.",
-                );
-              }}
-            />
+            <>
+              <BrandKit
+                brand={state.brand}
+                save={(brand) => {
+                  setState({ ...state, brand });
+                  notify(
+                    "Brand kit saved. New projects will use these defaults.",
+                  );
+                }}
+              />
+              <MemoryEditor
+                key={state.brandId + state.memory.learned.length}
+                memory={state.memory}
+                count={facts.length}
+                locked={!plans[state.plan].memory}
+                save={(memory) => {
+                  setState({ ...state, memory });
+                  notify("Brand Memory saved.");
+                }}
+              />
+            </>
           )}
           {view === "settings" && (
             <section className="settings-grid">
               <article className="card">
+                <h2>Plan</h2>
+                <p>
+                  Prototype: switching plans is free and no payment is taken.
+                </p>
+                <Select
+                  label="Current plan"
+                  value={state.plan}
+                  items={Object.keys(plans)}
+                  onChange={(plan) => {
+                    setState({ ...state, plan: plan as Plan });
+                    notify(`Switched to the ${plan} plan.`);
+                  }}
+                />
+                <ul className="plan-points">
+                  {plans[state.plan].points.map((point) => (
+                    <li key={point}>{point}</li>
+                  ))}
+                </ul>
+              </article>
+              <article className="card">
                 <h2>Your profile</h2>
-                <p>A familiar face in your creative space.</p>
+                <p>The name shown in your workspace.</p>
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
@@ -679,7 +911,7 @@ export default function Studio() {
                   <Button type="submit">Save profile</Button>
                 </form>
                 <Button variant="ghost" onClick={() => setOnboard(true)}>
-                  Update creative preferences <ArrowUpRight size={14} />
+                  Update business preferences <ArrowUpRight size={14} />
                 </Button>
               </article>
               <article className="card">
@@ -788,7 +1020,7 @@ export default function Studio() {
                 )}
               </article>
               <article className="card">
-                <h2>Your work belongs to you.</h2>
+                <h2>Data and backups</h2>
                 <p>
                   Projects and preferences are stored in this browser. Media is
                   stored in IndexedDB. Clearing browser data removes local work.
@@ -800,7 +1032,7 @@ export default function Studio() {
                       new Blob([JSON.stringify(state, null, 2)], {
                         type: "application/json",
                       }),
-                      "brandos-workspace.json",
+                      "unstuck-workspace.json",
                     );
                     notify(
                       "Workspace metadata exported. Media files are not included; keep your source files.",
@@ -854,7 +1086,7 @@ export default function Studio() {
                         );
                       } catch {
                         notify(
-                          "Could not restore that backup. Choose a BRANDOS workspace JSON file.",
+                          "Could not restore that backup. Choose a UnStuck workspace JSON file.",
                         );
                       } finally {
                         e.target.value = "";
@@ -864,8 +1096,8 @@ export default function Studio() {
                 </Field>
               </article>
               <article className="card">
-                <h2>Need a fresh perspective?</h2>
-                <p>Replay the tour to see how your ideas become posts.</p>
+                <h2>Product guide</h2>
+                <p>Review how UnStuck turns inputs into finished posts.</p>
                 <Button variant="outline" onClick={() => setTour(true)}>
                   Open studio guide <ArrowRight size={16} />
                 </Button>
@@ -877,9 +1109,10 @@ export default function Studio() {
               <Editor
                 key={p.id}
                 project={p}
-                state={state}
+                state={scoped}
                 update={updateProject}
                 addMedia={addMedia}
+                setStock={(stock) => setState((s) => (s ? { ...s, stock } : s))}
                 notify={notify}
                 finish={() => router.push("/studio/projects")}
               />
@@ -887,7 +1120,7 @@ export default function Studio() {
               <section className="create-start">
                 <h2>One click to a finished first edit.</h2>
                 <p>
-                  BRANDOS picks an idea and your footage, then adds scenes,
+                  UnStuck picks an idea and your footage, then adds scenes,
                   transitions, music and subtitles. You edit after, not before.
                 </p>
                 <div className="row wrap">
@@ -908,9 +1141,9 @@ export default function Studio() {
             ))}
         </main>
         <footer className="workspace-footer">
-          <span>Ideas deserve to go somewhere.</span>
+          <span>UnStuck · Content production for small businesses</span>
           <span>
-            Made with BRANDOS. <Sparkles size={12} />
+            Prototype <Sparkles size={12} />
           </span>
         </footer>
       </div>
@@ -952,12 +1185,12 @@ export default function Studio() {
               ×
             </button>
             <Sparkles className="olive" />
-            <h2>How BRANDOS works</h2>
+            <h2>How UnStuck works</h2>
             <ol className="tour-steps">
               {[
                 [
                   "Click Create New Post",
-                  "BRANDOS builds a finished edit: scenes, transitions, music, subtitles.",
+                  "UnStuck builds a finished edit: scenes, transitions, music, subtitles.",
                 ],
                 [
                   "Change anything",
@@ -987,7 +1220,7 @@ export default function Studio() {
               you choose cloud backup.
             </p>
             <Button onClick={() => setTour(false)}>
-              Got it. Let’s create <ArrowRight size={16} />
+              Got it <ArrowRight size={16} />
             </Button>
           </section>
         </div>
@@ -1016,7 +1249,7 @@ function Projects({
       <div className="filter-row">
         <input
           aria-label="Search projects"
-          placeholder="Find a story…"
+          placeholder="Search projects…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -1054,7 +1287,7 @@ function Projects({
       {!projects.length && (
         <div className="empty">
           <FolderOpen />
-          <h2>A little space for a new story.</h2>
+          <h2>No projects found</h2>
           <p>Create a new post above, or try a different search.</p>
         </div>
       )}
@@ -1077,16 +1310,16 @@ function Onboarding({
         aria-modal="true"
         aria-label="Creative preferences"
       >
-        <span className="eyebrow">A LITTLE INTRODUCTION</span>
-        <h2>Let’s make this your space.</h2>
-        <p>Five small things to help us find your creative rhythm.</p>
+        <span className="eyebrow">WORKSPACE SETUP</span>
+        <h2>Tell us about your business</h2>
+        <p>Five details that help tailor ideas and edits.</p>
         <form
           onSubmit={(e) => {
             e.preventDefault();
             close(p);
           }}
         >
-          <Field label="What should we call you?">
+          <Field label="Business or contact name">
             <input
               autoFocus
               required
@@ -1097,19 +1330,19 @@ function Onboarding({
           </Field>
           <div className="two-col">
             <Select
-              label="What do you create?"
+              label="Industry"
               value={p.niche}
               items={[
-                "Lifestyle & everyday",
-                "Education & learning",
-                "Business & products",
-                "Travel & food",
-                "Art & design",
+                "Retail & products",
+                "Food & hospitality",
+                "Professional services",
+                "Health & wellness",
+                "Education & training",
               ]}
               onChange={(niche) => setP({ ...p, niche })}
             />
             <Select
-              label="Where do you share?"
+              label="Primary platform"
               value={p.platform}
               items={["Instagram Reels", "YouTube Shorts", "TikTok"]}
               onChange={(platform) => setP({ ...p, platform })}
@@ -1121,10 +1354,10 @@ function Onboarding({
               onChange={(experience) => setP({ ...p, experience })}
             />
             <Select
-              label="Your biggest challenge"
+              label="Biggest content challenge"
               value={p.challenge}
               items={[
-                "Turning footage into stories",
+                "Turning footage into posts",
                 "Finding ideas",
                 "Editing takes too long",
                 "Posting consistently",
@@ -1133,7 +1366,7 @@ function Onboarding({
             />
           </div>
           <Select
-            label="Your visual style"
+            label="Visual style"
             value={p.style}
             items={[
               "Warm & minimal",
@@ -1152,7 +1385,7 @@ function Onboarding({
               Skip for now
             </Button>
             <Button type="submit">
-              Make myself at home <ArrowRight size={16} />
+              Save preferences <ArrowRight size={16} />
             </Button>
           </div>
         </form>
@@ -1172,11 +1405,11 @@ function BrandKit({ brand, save }: { brand: Brand; save: (b: Brand) => void }) {
       }}
     >
       <section className="card">
-        <span className="eyebrow">YOUR CREATIVE SIGNATURE</span>
-        <h2>A familiar feeling, every time.</h2>
+        <span className="eyebrow">BRAND DEFAULTS</span>
+        <h2>Applied to every video</h2>
         <p>
           These defaults are applied when you create a new project. You can
-          always change them for each story.
+          always change them for each post.
         </p>
         <Field label="Brand accent">
           <div className="color-input">
@@ -1277,7 +1510,7 @@ function BrandKit({ brand, save }: { brand: Brand; save: (b: Brand) => void }) {
         </p>
       </section>
       <aside className="brand-preview">
-        <span className="eyebrow">A LITTLE PREVIEW</span>
+        <span className="eyebrow">PREVIEW</span>
         <div
           style={{ background: b.color, color: contrastText(b.color) }}
           className={`brand-swatch ${b.font === "Serif" ? "serif" : ""}`}
@@ -1288,14 +1521,16 @@ function BrandKit({ brand, save }: { brand: Brand; save: (b: Brand) => void }) {
             <Sparkles />
           )}
           <h2>
-            Small moments.
+            Your brand,
             <br />
-            Your signature.
+            on every post.
           </h2>
-          <p>A story that feels like you.</p>
-          <span>MADE WITH INTENTION.</span>
+          <p>Colour, typography and logo as they will appear.</p>
+          <span>
+            {b.handle ? `@${b.handle.replace(/^@/, "")}` : "YOUR HANDLE"}
+          </span>
         </div>
-        <p>Consistent. Considered. Completely yours.</p>
+        <p>Consistent across every post.</p>
       </aside>
     </form>
   );

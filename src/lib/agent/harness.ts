@@ -41,6 +41,7 @@ export async function* runAgent(
   workspace: Workspace,
   model: ModelProvider,
   video: VideoProvider,
+  maxClips = limits.maxClips,
 ): AsyncGenerator<AgentEvent> {
   const started = Date.now();
   const ctx: Context = {
@@ -51,6 +52,7 @@ export async function* runAgent(
   };
   const specs = tools.map(({ run: _run, ...spec }) => spec);
   const transcript: Transcript = [];
+  let clipCalls = 0;
   let rejected = 0,
     summary = "";
   yield {
@@ -80,11 +82,8 @@ export async function* runAgent(
           if (!tool) throw Error(`Unknown tool “${call.name}”`);
           if (transcript.length >= limits.maxToolCalls)
             throw Error("Tool-call budget for this run is used up");
-          if (
-            call.name === "generate_clip" &&
-            ctx.clips.length >= limits.maxClips
-          )
-            throw Error(`At most ${limits.maxClips} generated clips per run`);
+          if (call.name === "generate_clip" && ++clipCalls > maxClips)
+            throw Error(`At most ${maxClips} generated clips per run`);
           const errors = validate(tool.schema, call.args);
           if (errors.length)
             throw Error(`Invalid arguments: ${errors.join("; ")}`);

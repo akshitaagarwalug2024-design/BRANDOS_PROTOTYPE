@@ -3,6 +3,8 @@ export type Json = Record<string, unknown>;
 // What the browser sends: a read-only snapshot of the creator's workspace.
 export type Workspace = {
   brief: string;
+  // True when clips come from the paid video model, so the plan keeps them short.
+  paidVideo?: boolean;
   today: string;
   profile: { name: string; niche: string };
   goal: Goal;
@@ -56,7 +58,8 @@ export interface VideoProvider {
     prompt: string;
     seconds: number;
     ratio: string;
-  }): Promise<{ mime: string; data: string }>;
+    // `url` is a provider file id fetched through /api/agent/clip instead of inline data.
+  }): Promise<{ mime: string; data: string; url?: string }>;
 }
 export type Clip = {
   id: string;
@@ -64,6 +67,7 @@ export type Clip = {
   prompt: string;
   mime: string;
   data: string;
+  url?: string;
 };
 export type DraftScene = {
   beat: string;

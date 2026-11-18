@@ -1,5 +1,6 @@
 import { gradeFilter, type Brand, type Project, type Media } from "./model";
 import { startMusic } from "./music";
+import { svgUrl } from "./shapes";
 function lines(ctx: CanvasRenderingContext2D, text: string, width: number) {
   const words = text.split(" "),
     out: string[] = [];
@@ -40,9 +41,12 @@ export async function renderVideo(
       : project.ratio === "1:1"
         ? [720, 720]
         : [540, 960];
-  canvas.width = dimensions[0];
-  canvas.height = dimensions[1];
+  // Drawn at 540 wide and scaled up, so the export is 1080 x 1920.
+  const density = 2;
+  canvas.width = dimensions[0] * density;
+  canvas.height = dimensions[1] * density;
   const ctx = canvas.getContext("2d")!;
+  ctx.scale(density, density);
   // Holds the last frame of the previous scene so transitions can blend from it.
   const previous = document.createElement("canvas");
   previous.width = canvas.width;
@@ -51,7 +55,7 @@ export async function renderVideo(
   const chunks: Blob[] = [];
   const recorder = new MediaRecorder(stream, {
     mimeType: mime,
-    videoBitsPerSecond: 2500000,
+    videoBitsPerSecond: 8000000,
   });
   const total = project.scenes.reduce((n, s) => n + s.duration, 0);
   if (!total || total > 120)
@@ -77,6 +81,61 @@ export async function renderVideo(
     logo.src = brand.logo;
     await logo.decode().catch(() => (logo = undefined));
   }
+  // Overlay items: load each once. GIF stickers are decoded to frames so they
+  // animate in the export; other images and looping videos draw directly.
+  const overlays = new Map<string, (t: number) => CanvasImageSource>();
+  const overlayVideos: HTMLVideoElement[] = [];
+  for (const item of project.items || []) {
+    const file = media.find((m) => m.id === item.mediaId);
+    const src = item.svg ? svgUrl(item.svg, item.color) : file?.url;
+    if (!src) continue;
+    try {
+      if (file?.type === "video") {
+        const v = document.createElement("video");
+        v.src = src;
+        v.muted = true;
+        v.loop = true;
+        v.playsInline = true;
+        await v.play();
+        overlayVideos.push(v);
+        overlays.set(item.id, () => v);
+        continue;
+      }
+      const blob = item.svg ? undefined : await (await fetch(src)).blob();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const Decoder = (window as any).ImageDecoder;
+      if (blob?.type === "image/gif" && Decoder) {
+        const decoder = new Decoder({
+          data: await blob.arrayBuffer(),
+          type: "image/gif",
+        });
+        await decoder.tracks.ready;
+        const count = Math.min(decoder.tracks.selectedTrack.frameCount, 80);
+        const frames: { picture: ImageBitmap; end: number }[] = [];
+        let length = 0;
+        for (let i = 0; i < count; i++) {
+          const { image } = await decoder.decode({ frameIndex: i });
+          length += (image.duration || 100000) / 1e6;
+          frames.push({ picture: await createImageBitmap(image), end: length });
+          image.close();
+        }
+        if (frames.length) {
+          overlays.set(
+            item.id,
+            (t) =>
+              (frames.find((f) => t % length < f.end) || frames[0]).picture,
+          );
+          continue;
+        }
+      }
+      const img = new Image();
+      img.src = src;
+      await img.decode();
+      overlays.set(item.id, () => img);
+    } catch {
+      // An item that cannot load is left out rather than failing the export.
+    }
+  }
   let audio: AudioContext | undefined;
   let current: HTMLVideoElement | HTMLAudioElement | undefined;
   let stopMusic = () => {};
@@ -86,7 +145,10 @@ export async function renderVideo(
     const dest = audio.createMediaStreamDestination();
     const gain = audio.createGain();
     gain.gain.value = project.volume;
-    gain.connect(dest);
+    // A compressor keeps clip sound and music at a steady level.
+    const level = audio.createDynamicsCompressor();
+    level.connect(dest);
+    gain.connect(level);
     dest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
     const done = new Promise<Blob>((resolve, reject) => {
       recorder.ondataavailable = (e) => {
@@ -97,7 +159,21 @@ export async function renderVideo(
     });
     let elapsed = 0;
     recorder.start(500);
-    stopMusic = startMusic(audio, dest, project.music, project.musicVolume);
+    const own =
+      project.music === "My audio"
+        ? media.find((m) => m.id === project.musicId)
+        : undefined;
+    if (own?.url) {
+      // The creator's own soundtrack, looped under the whole video.
+      const track = new Audio(own.url);
+      track.loop = true;
+      const trackGain = audio.createGain();
+      trackGain.gain.value = project.musicVolume;
+      audio.createMediaElementSource(track).connect(trackGain).connect(level);
+      await track.play();
+      stopMusic = () => track.pause();
+    } else
+      stopMusic = startMusic(audio, level, project.music, project.musicVolume);
     for (const [index, scene] of project.scenes.entries()) {
       if (signal.aborted) throw Error("Export canceled.");
       const m = media.find((m) => m.id === scene.mediaId);
@@ -142,11 +218,11 @@ export async function renderVideo(
           }
           const delta = (performance.now() - started) / 1000;
           const part = Math.min(1, delta / scene.duration);
-          const w = canvas.width,
-            h = canvas.height;
+          const w = dimensions[0],
+            h = dimensions[1];
           ctx.fillStyle = "#000";
           ctx.fillRect(0, 0, w, h);
-          if (index > 0) ctx.drawImage(previous, 0, 0);
+          if (index > 0) ctx.drawImage(previous, 0, 0, w, h);
           // Scene picture: transition in, slow motion effect, colour grade.
           const enter =
             transition === "Cut" ? 1 : ease(Math.min(1, delta / 0.45));
@@ -205,6 +281,35 @@ export async function renderVideo(
           top.addColorStop(1, "rgba(0,0,0,0)");
           ctx.fillStyle = top;
           ctx.fillRect(0, 0, w, h * 0.2);
+          for (const item of project.items || []) {
+            const source = overlays.get(item.id);
+            if (!source || (item.scene !== "all" && item.scene !== scene.id))
+              continue;
+            const clock = elapsed + delta;
+            // Items on every scene animate in once; scene items on each entry.
+            const k = ease(
+              Math.min(1, (item.scene === "all" ? clock : delta) / 0.45),
+            );
+            const iw = item.w * w,
+              ih = iw / item.aspect;
+            ctx.save();
+            if (item.anim !== "None" && item.anim !== "Pulse")
+              ctx.globalAlpha = k;
+            ctx.translate(
+              item.x * w,
+              item.y * h + (item.anim === "Slide up" ? 40 * (1 - k) : 0),
+            );
+            ctx.rotate((item.rot * Math.PI) / 180);
+            const size =
+              item.anim === "Pop"
+                ? 0.6 + 0.4 * k
+                : item.anim === "Pulse"
+                  ? 1 + 0.06 * Math.sin(clock * 4)
+                  : 1;
+            ctx.scale(size, size);
+            ctx.drawImage(source(clock), -iw / 2, -ih / 2, iw, ih);
+            ctx.restore();
+          }
           const ending =
             project.elements.cta &&
             last &&
@@ -332,6 +437,11 @@ export async function renderVideo(
             ctx.beginPath();
             ctx.roundRect(0, py, w, ph + 40, 36);
             ctx.fill();
+            if (logo) {
+              const lh = 54,
+                lw = (logo.naturalWidth / logo.naturalHeight) * lh;
+              ctx.drawImage(logo, (w - lw) / 2, py + 26, lw, lh);
+            }
             ctx.fillStyle = onAccent;
             ctx.font = `800 ${f}px ${titleFamily}`;
             const ls = lines(ctx, project.cta, w - 120).slice(0, 3);
@@ -400,6 +510,7 @@ export async function renderVideo(
     return blob;
   } finally {
     stopMusic();
+    overlayVideos.forEach((v) => v.pause());
     if (recorder.state !== "inactive") recorder.stop();
     current?.pause();
     stream.getTracks().forEach((t) => t.stop());
@@ -429,7 +540,7 @@ export function coverSvg(title: string, color: string) {
     } else l += (l ? " " : "") + w;
   }
   ls.push(l);
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920"><rect width="1080" height="1920" fill="${/^#[0-9a-f]{6}$/i.test(color) ? color : "#66744d"}"/><circle cx="900" cy="300" r="500" fill="#ffffff" opacity=".07"/><text x="90" y="180" fill="${contrastText(color)}" font-family="sans-serif" font-size="36" letter-spacing="8">A STORY BY YOU</text>${ls
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920"><rect width="1080" height="1920" fill="${/^#[0-9a-f]{6}$/i.test(color) ? color : "#66744d"}"/><circle cx="900" cy="300" r="500" fill="#ffffff" opacity=".07"/><text x="90" y="180" fill="${contrastText(color)}" font-family="sans-serif" font-size="36" letter-spacing="8">NEW POST</text>${ls
     .slice(0, 7)
     .map(
       (s, i) =>
@@ -437,7 +548,7 @@ export function coverSvg(title: string, color: string) {
     )
     .join(
       "",
-    )}<text x="90" y="1770" fill="${contrastText(color)}" font-family="sans-serif" font-size="32">made with brandos.</text></svg>`;
+    )}<text x="90" y="1770" fill="${contrastText(color)}" font-family="sans-serif" font-size="32">Made with UnStuck</text></svg>`;
 }
 
 export function contrastText(color: string) {

@@ -17,7 +17,14 @@ import {
 import { Button } from "./ui/button";
 import { putFile } from "@/lib/storage";
 import { analyze } from "@/lib/library";
-import { gradeFilter, type Media, type Project, type Brand } from "@/lib/model";
+import {
+  gradeFilter,
+  type Item,
+  type Media,
+  type Project,
+  type Brand,
+} from "@/lib/model";
+import { svgUrl } from "@/lib/shapes";
 import { startMusic } from "@/lib/music";
 import { contrastText } from "@/lib/render";
 export function Thumbnail({
@@ -41,7 +48,7 @@ export function Thumbnail({
       ) : (
         <div className="audio-art">
           <Music size={36} />
-          <span>Sound & story</span>
+          <span>Audio</span>
         </div>
       )}
       {media?.type === "video" && (
@@ -72,10 +79,7 @@ export function Uploader({
     try {
       for (let i = 0; i < files.length; i++) {
         const f = files[i];
-        if (
-          !/^(image|video|audio)\//.test(f.type) ||
-          f.type === "image/svg+xml"
-        ) {
+        if (!/^(image|video)\//.test(f.type) || f.type === "image/svg+xml") {
           notify(
             `${f.name}: choose a supported photo, video, or audio file (SVG uploads are not supported).`,
           );
@@ -135,8 +139,8 @@ export function Uploader({
           `Storing your media · ${progress}%`
         ) : (
           <>
-            <b>Drop videos, photos or audio here</b> · goes into “{collection}”
-            · up to 100 MB each
+            <b>Drop videos or photos here</b> · goes into “{collection}” · up to
+            100 MB each
           </>
         )}
       </span>
@@ -158,7 +162,7 @@ export function Uploader({
       <input
         ref={input}
         type="file"
-        accept="image/*,video/*,audio/*"
+        accept="image/*,video/*"
         multiple
         onChange={(e) => void add(e.target.files)}
         hidden
@@ -298,7 +302,6 @@ export function MediaLibrary({
               ["all", "All"],
               ["image", "Photos"],
               ["video", "Videos"],
-              ["audio", "Audio"],
             ].map(([key, label]) => (
               <button
                 key={key}
@@ -532,14 +535,70 @@ export function Preview({
   brand,
   active = 0,
   onActive,
+  selected,
+  onSelect,
+  onItem,
 }: {
   project: Project;
   media: Media[];
   brand: Brand;
   active?: number;
   onActive?: (i: number) => void;
+  // Passing these makes overlay items selectable and draggable.
+  selected?: string;
+  onSelect?: (id: string) => void;
+  onItem?: (id: string, v: Partial<Item>) => void;
 }) {
   const [playing, setPlaying] = useState(false);
+  const frame = useRef<HTMLDivElement>(null);
+  const drag = (
+    e: React.PointerEvent,
+    item: Item,
+    mode: "move" | "size" | "rot",
+  ) => {
+    if (!onItem || !frame.current) return;
+    e.preventDefault();
+    e.stopPropagation();
+    onSelect?.(item.id);
+    const box = frame.current.getBoundingClientRect();
+    const cx = box.left + item.x * box.width,
+      cy = box.top + item.y * box.height;
+    const sx = e.clientX,
+      sy = e.clientY,
+      reach = Math.hypot(sx - cx, sy - cy) || 1;
+    const clamp = (n: number, lo = 0, hi = 1) => Math.max(lo, Math.min(hi, n));
+    const move = (ev: PointerEvent) =>
+      onItem(
+        item.id,
+        mode === "move"
+          ? {
+              x: clamp(item.x + (ev.clientX - sx) / box.width),
+              y: clamp(item.y + (ev.clientY - sy) / box.height),
+            }
+          : mode === "size"
+            ? {
+                w: clamp(
+                  (item.w * Math.hypot(ev.clientX - cx, ev.clientY - cy)) /
+                    reach,
+                  0.05,
+                  1.5,
+                ),
+              }
+            : {
+                rot: Math.round(
+                  (Math.atan2(ev.clientY - cy, ev.clientX - cx) * 180) /
+                    Math.PI +
+                    90,
+                ),
+              },
+      );
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scene = project.scenes[active] || project.scenes[0];
   const item = media.find(
@@ -574,8 +633,20 @@ export function Preview({
     }
   }, [playing, active, item?.url, scene?.trim, project.volume]);
   // Backing track plays only while the preview is playing.
+  const ownTrack =
+    project.music === "My audio"
+      ? media.find((m) => m.id === project.musicId)?.url
+      : undefined;
   useEffect(() => {
     if (!playing || project.music === "None") return;
+    if (project.music === "My audio") {
+      if (!ownTrack) return;
+      const track = new Audio(ownTrack);
+      track.loop = true;
+      track.volume = project.musicVolume;
+      void track.play().catch(() => {});
+      return () => track.pause();
+    }
     const ctx = new AudioContext();
     const stop = startMusic(
       ctx,
@@ -587,7 +658,7 @@ export function Preview({
       stop();
       setTimeout(() => void ctx.close(), 450);
     };
-  }, [playing, project.music, project.musicVolume]);
+  }, [playing, project.music, project.musicVolume, ownTrack]);
   const accent = project.accent || brand.color;
   const motion = {
     animationDuration: `${scene?.duration || 5}s`,
@@ -599,6 +670,8 @@ export function Preview({
       <div
         className={`video-preview ratio-${project.ratio.replace(":", "-")} font-${slug(brand.font)}`}
         style={{ background: "#000" }}
+        ref={frame}
+        onPointerDown={() => onSelect?.("")}
       >
         <div
           key={scene?.id}
@@ -628,13 +701,59 @@ export function Preview({
           ) : (
             <div className="audio-art">
               <Music size={48} />
-              <p>{item?.name || "Your story starts here"}</p>
+              <p>{item?.name || "No media selected"}</p>
               {item?.type === "audio" && (
                 <audio ref={audio} src={item.url} loop />
               )}
             </div>
           )}
         </div>
+        {project.items
+          .filter((item) => item.scene === "all" || item.scene === scene?.id)
+          .map((item) => {
+            const file = media.find((m) => m.id === item.mediaId);
+            const src = item.svg ? svgUrl(item.svg, item.color) : file?.url;
+            if (!src) return null;
+            return (
+              <div
+                key={item.id}
+                className={`pv-item ${selected === item.id ? "sel" : ""} ${onItem ? "edit" : ""}`}
+                style={{
+                  left: `${item.x * 100}%`,
+                  top: `${item.y * 100}%`,
+                  width: `${item.w * 100}%`,
+                  aspectRatio: item.aspect,
+                  transform: `translate(-50%, -50%) rotate(${item.rot}deg)`,
+                }}
+                onPointerDown={(e) => drag(e, item, "move")}
+              >
+                <div
+                  key={`${scene?.id}${playing}`}
+                  className={`an-${slug(item.anim)}`}
+                >
+                  {file?.type === "video" ? (
+                    <video src={src} muted loop autoPlay playsInline />
+                  ) : (
+                    <img src={src} alt={item.name} draggable={false} />
+                  )}
+                </div>
+                {selected === item.id && onItem && (
+                  <>
+                    <span
+                      className="h-size"
+                      title="Drag to resize"
+                      onPointerDown={(e) => drag(e, item, "size")}
+                    />
+                    <span
+                      className="h-rot"
+                      title="Drag to rotate"
+                      onPointerDown={(e) => drag(e, item, "rot")}
+                    />
+                  </>
+                )}
+              </div>
+            );
+          })}
         {project.elements.progress && (
           <div className="pv-progress">
             <span

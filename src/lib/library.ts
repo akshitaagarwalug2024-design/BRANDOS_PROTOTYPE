@@ -112,7 +112,7 @@ export function matchFootage(
 ): Match[] {
   const want = [...new Set(words(idea))];
   return media
-    .filter((m) => !m.sample && m.url && m.type !== "audio")
+    .filter((m) => !m.sample && !m.stock && m.url && m.type !== "audio")
     .map((m) => {
       const have = new Set(
         words(

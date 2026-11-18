@@ -145,7 +145,7 @@ export const tools: Tool[] = [
       engagementRate: metrics["Engagement rate"].values.at(-1),
       bestPost: reactions[0],
       weakestPost: reactions.at(-1),
-      trending: trending[w.profile.niche] || trending["Lifestyle & everyday"],
+      trending: trending[w.profile.niche] || trending["Retail & products"],
     }),
   },
   {

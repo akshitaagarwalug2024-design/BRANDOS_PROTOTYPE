@@ -1,4 +1,4 @@
-# BRANDOS — Fresh Studio
+# UnStuck — Fresh Studio
 
 A fresh cobalt-and-navy design with an interactive landing-page walkthrough, a redesigned dashboard, larger typography, and a complete content creation workflow. This project reuses tested media/export utilities and keeps browser data separate from the original app.
 
@@ -13,7 +13,7 @@ npm ci
 npm run dev
 ```
 
-Open the application on port 3002. The original app remains in `/workspace/BRANDOS_PROTOTYPE`; this separate build is in `/workspace/BRANDOS_FRESH`. Enter the studio, complete or skip the short introduction, and create a new post. Select your own files or the original sample collection; choose a story direction, edit scenes, request demo revisions, and export a post package. Projects remain available after reloading.
+Open the application on port 3002. The original app remains in `/workspace/UnStuck_PROTOTYPE`; this separate build is in `/workspace/UnStuck_FRESH`. Enter the studio, complete or skip the short introduction, and create a new post. Select your own files or the original sample collection; choose a story direction, edit scenes, request demo revisions, and export a post package. Projects remain available after reloading.
 
 ```sh
 npm run typecheck

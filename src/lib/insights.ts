@@ -23,23 +23,23 @@ export const metrics: Record<
 };
 export const competitors = [
   { name: "You", followers: 0, perWeek: 3, engagement: 5.2, you: true },
-  { name: "@slowstudio", followers: 18400, perWeek: 5, engagement: 4.6 },
-  { name: "@everyday.edit", followers: 9200, perWeek: 4, engagement: 3.8 },
-  { name: "@madebymira", followers: 5100, perWeek: 2, engagement: 6.1 },
+  { name: "@northside.goods", followers: 18400, perWeek: 5, engagement: 4.6 },
+  { name: "@thecornerstore", followers: 9200, perWeek: 4, engagement: 3.8 },
+  { name: "@atelier.mira", followers: 5100, perWeek: 2, engagement: 6.1 },
 ];
 export const reactions = [
   {
-    title: "A slower kind of morning",
+    title: "How we pack every order",
     type: "Reel",
     views: 12400,
     likes: 1180,
     comments: 96,
     saves: 412,
     mood: "Loved",
-    theme: "“Needed this today” — people relate to the calm pace.",
+    theme: "Viewers asked about delivery times in the comments.",
   },
   {
-    title: "3 things I learned this month",
+    title: "3 things customers ask us",
     type: "Reel",
     views: 8900,
     likes: 640,
@@ -49,7 +49,7 @@ export const reactions = [
     theme: "Lots of questions about tip #2 — worth a follow-up.",
   },
   {
-    title: "Studio tour",
+    title: "Shop tour",
     type: "Post",
     views: 4300,
     likes: 310,
@@ -60,30 +60,30 @@ export const reactions = [
   },
 ];
 export const trending: Record<string, [string, number][]> = {
-  "Lifestyle & everyday": [
-    ["Sunday reset routines", 42],
-    ["5-to-9 before the 9-to-5", 31],
-    ["Romanticising small rituals", 18],
-  ],
-  "Education & learning": [
-    ["Study with me", 38],
-    ["Learn this in 30 seconds", 27],
-    ["Notes that actually work", 16],
-  ],
-  "Business & products": [
+  "Retail & products": [
     ["Packing an order", 44],
-    ["Honest founder diaries", 29],
+    ["Founder updates", 29],
     ["Pricing, explained", 14],
   ],
-  "Travel & food": [
-    ["48 hours in one city", 36],
-    ["Hidden local spots", 30],
-    ["What I ate today", 19],
+  "Food & hospitality": [
+    ["Morning prep", 41],
+    ["Meet the supplier", 26],
+    ["Dish of the week", 18],
   ],
-  "Art & design": [
-    ["Process timelapses", 47],
-    ["Sketchbook tours", 25],
-    ["Redesigning old work", 17],
+  "Professional services": [
+    ["Client questions answered", 38],
+    ["A day at the practice", 24],
+    ["Process walkthroughs", 15],
+  ],
+  "Health & wellness": [
+    ["Myths corrected", 36],
+    ["What a first visit looks like", 27],
+    ["Meet the team", 16],
+  ],
+  "Education & training": [
+    ["Learn this in 30 seconds", 39],
+    ["Student results", 25],
+    ["Course previews", 17],
   ],
 };
 export const compact = (n: number) =>

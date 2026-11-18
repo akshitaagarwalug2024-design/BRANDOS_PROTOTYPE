@@ -13,6 +13,7 @@ import {
 import { Button } from "./ui/button";
 import { Preview } from "./media";
 import { download, putFile } from "@/lib/storage";
+import { analyze } from "@/lib/library";
 import { renderVideo } from "@/lib/render";
 import type { Media, Project, State } from "@/lib/model";
 import type { AgentEvent, ToolSpec } from "@/lib/agent/types";
@@ -39,6 +40,8 @@ export default function Agent({
   notify: (s: string) => void;
 }) {
   const [topic, setTopic] = useState(""),
+    [paid, setPaid] = useState(false),
+    [passcode, setPasscode] = useState(""),
     [status, setStatus] = useState<
       "idle" | "running" | "rendering" | "done" | "failed"
     >("idle"),
@@ -58,6 +61,12 @@ export default function Agent({
       model: string;
       video: string;
       limits: { maxSteps: number; maxToolCalls: number; maxClips: number };
+      paid: {
+        available: boolean;
+        label: string;
+        maxClips: number;
+        usdPerSecond: number;
+      };
       tools: ToolSpec[];
     } | null>(null),
     [active, setActive] = useState(0);
@@ -85,6 +94,8 @@ export default function Agent({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           brief: topic.trim(),
+          paid,
+          passcode: paid ? passcode : undefined,
           today: localDate(),
           profile: { name: state.profile.name, niche: state.profile.niche },
           goal: state.goal,
@@ -142,16 +153,26 @@ export default function Agent({
       // Store generated clips next to uploads so the project survives a reload.
       const media: Media[] = [];
       for (const clip of done.clips) {
-        const blob = new Blob([clip.data], { type: clip.mime });
+        const blob = clip.url
+          ? await fetch(`/api/agent/clip?file=${clip.url}`, {
+              headers: { "x-agent-passcode": passcode },
+            }).then((r) => {
+              if (!r.ok)
+                throw Error("A generated clip could not be downloaded.");
+              return r.blob();
+            })
+          : new Blob([clip.data], { type: clip.mime });
+        const type = clip.mime.startsWith("video") ? "video" : "image";
         await putFile(clip.id, blob);
         media.push({
           id: clip.id,
           name: clip.name,
-          type: "image",
+          type,
           url: URL.createObjectURL(blob),
           collection: "Agent generated",
           tags: clip.prompt.slice(0, 80),
           size: blob.size,
+          ...(await analyze(blob, type)),
         });
       }
       onResult(done.project, media);
@@ -208,6 +229,38 @@ export default function Agent({
             </Button>
           )}
         </form>
+        {meta?.paid.available && (
+          <div className="card agent-paid">
+            <label className="toggle-line">
+              <input
+                type="checkbox"
+                checked={paid}
+                disabled={busy}
+                onChange={(e) => setPaid(e.target.checked)}
+              />{" "}
+              Generate real video clips with {meta.paid.label}
+            </label>
+            {paid && (
+              <>
+                <input
+                  type="password"
+                  aria-label="Passcode for paid generation"
+                  placeholder="Passcode"
+                  value={passcode}
+                  disabled={busy}
+                  onChange={(e) => setPasscode(e.target.value)}
+                />
+                <small>
+                  Costs API credit: up to {meta.paid.maxClips} clips of 3
+                  seconds, about $
+                  {(meta.paid.maxClips * 3 * meta.paid.usdPerSecond).toFixed(2)}{" "}
+                  per run. Scenes covered by your own footage are free. A run
+                  takes one to two minutes.
+                </small>
+              </>
+            )}
+          </div>
+        )}
         {status === "idle" && !steps.length && (
           <div className="empty">
             <Bot />
@@ -312,7 +365,7 @@ export default function Agent({
                 size="sm"
                 disabled={!result.video}
                 onClick={() =>
-                  result.video && download(result.video, "brandos-agent.webm")
+                  result.video && download(result.video, "unstuck-agent.webm")
                 }
               >
                 <Download size={14} />{" "}
@@ -358,8 +411,8 @@ export default function Agent({
             ))}
           </ul>
           <p className="muted">
-            Both providers are demo stand-ins behind the same interface a real
-            LLM and video model will use.
+            The model is a scripted stand-in. Video is placeholder frames unless
+            paid generation is switched on.
           </p>
         </section>
       </aside>

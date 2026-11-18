@@ -17,6 +17,7 @@ const statuses: Status[] = [
   "Draft",
   "In Progress",
   "Needs Review",
+  "In Human Review",
   "Ready to Publish",
   "Published",
 ];
@@ -56,7 +57,7 @@ export default function Publishing({
     if (
       status === "Published" &&
       !confirm(
-        "Have you published this post yourself? BRANDOS has no connected social integration.",
+        "Have you published this post yourself? UnStuck has no connected social integration.",
       )
     )
       return;

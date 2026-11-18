@@ -1,19 +1,31 @@
 import { limits, runAgent } from "@/lib/agent/harness";
 import { tools } from "@/lib/agent/tools";
 import { demoModel, demoVideo } from "@/lib/agent/demo";
+import { omniPricePerSecond, omniVideo } from "@/lib/agent/omni";
 import type { Workspace } from "@/lib/agent/types";
+// Paid generation can take a couple of minutes for three clips.
+export const maxDuration = 300;
+const paidReady = () =>
+  Boolean(process.env.GEMINI_API_KEY && process.env.AGENT_PASSCODE);
+const paidClips = 3;
 // Describes the harness so the UI can show it before a run.
 export function GET() {
   return Response.json({
     model: demoModel.label,
     video: demoVideo.label,
     limits,
+    paid: {
+      available: paidReady(),
+      label: omniVideo.label,
+      maxClips: paidClips,
+      usdPerSecond: omniPricePerSecond,
+    },
     tools: tools.map(({ run: _run, ...spec }) => spec),
   });
 }
 // Streams one JSON event per line as the agent works.
 export async function POST(req: Request) {
-  let w: Workspace;
+  let w: Workspace & { paid?: boolean; passcode?: string };
   try {
     const text = await req.text();
     if (text.length > 60000)
@@ -38,7 +50,17 @@ export async function POST(req: Request) {
     );
   }
   const encoder = new TextEncoder();
-  const events = runAgent(w, demoModel, demoVideo);
+  const paid = w.paid === true;
+  if (paid && (!paidReady() || w.passcode !== process.env.AGENT_PASSCODE))
+    return Response.json(
+      { error: "Wrong passcode for paid video generation." },
+      { status: 403 },
+    );
+  delete w.passcode;
+  w.paidVideo = paid;
+  const events = paid
+    ? runAgent(w, demoModel, omniVideo, paidClips)
+    : runAgent(w, demoModel, demoVideo);
   return new Response(
     new ReadableStream({
       async pull(controller) {
