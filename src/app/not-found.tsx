@@ -4,10 +4,10 @@ export default function NotFound() {
   return (
     <main className="loading-screen">
       <Sparkles />
-      <h1>This story took a little detour.</h1>
-      <p>The page you’re looking for isn’t here.</p>
+      <h1>Page not found</h1>
+      <p>The page you are looking for does not exist.</p>
       <Link className="btn btn-primary" href="/studio">
-        Back to your studio <ArrowRight size={16} />
+        Back to the studio <ArrowRight size={16} />
       </Link>
     </main>
   );

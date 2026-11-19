@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ArrowUpRight, Sparkles } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -9,28 +9,40 @@ export default function Auth() {
     [email, setEmail] = useState(""),
     [password, setPassword] = useState(""),
     [message, setMessage] = useState(""),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [account, setAccount] = useState("");
+  useEffect(() => {
+    if (!supabase) return;
+    const params = new URLSearchParams(location.hash.slice(1));
+    const urlError = params.get("error_description");
+    if (urlError) setMessage(urlError.replace(/\+/g, " "));
+    void supabase.auth.getUser().then(({ data }) => {
+      setAccount(data.user?.email || "");
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      setAccount(session?.user?.email || "");
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
   return (
     <main className="auth-page">
       <div className="auth-art">
         <Link href="/" className="wordmark">
-          brandos®
+          UnStuck
         </Link>
-        <img src="/media/grow.svg" alt="A little room to grow" />
+        <img src="/media/grow.svg" alt="" />
         <h1>
-          Your next story
+          Consistent content,
           <br />
-          starts here.
+          without a content team.
         </h1>
       </div>
       <div className="auth-form">
         <Link href="/" className="text-link">
-          <ArrowLeft size={16} /> Back to BRANDOS
+          <ArrowLeft size={16} /> Back to UnStuck
         </Link>
         <Sparkles size={28} />
-        <h2>
-          {signup ? "Make room for your ideas." : "Welcome back, creator."}
-        </h2>
+        <h2>{signup ? "Create your account" : "Sign in to UnStuck"}</h2>
         <p>
           {supabase
             ? "Sign in to back up your workspace securely."
@@ -94,6 +106,22 @@ export default function Auth() {
         {message && (
           <p role="status" className="notice">
             {message}
+          </p>
+        )}
+        {account && (
+          <p role="status" className="notice">
+            You are signed in as {account}.{" "}
+            <Link href="/studio">Open the studio</Link> or{" "}
+            <button
+              className="text-link"
+              onClick={async () => {
+                await supabase?.auth.signOut();
+                setMessage("Signed out.");
+              }}
+            >
+              sign out
+            </button>
+            .
           </p>
         )}
         <button className="text-link" onClick={() => setSignup(!signup)}>

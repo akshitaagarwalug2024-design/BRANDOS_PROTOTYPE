@@ -20,6 +20,8 @@ export default defineConfig({
     command: "npm run start -- --port 3001",
     url: "http://127.0.0.1:3001",
     reuseExistingServer: false,
+    // Tests must never spend API credit: run with the paid providers switched off.
+    env: { GEMINI_API_KEY: "", AGENT_PASSCODE: "" },
     timeout: 60000,
   },
 });
